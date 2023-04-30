@@ -4,11 +4,12 @@ Discord bot to track and manage a ladder tournament
 ## Implemented features
 
 - working commands
-    - ... shh, we'll get there
+    - bot is able to connect to discord and accept a handful of commands
+    - we'll define "working" as able to take action on the database
 
 ## Planned features
 
-- Basic bot is up and listening to commands
+- Add some testing before it gets too late...
 - Bot is able to accept commands
     - register
     - print
@@ -25,8 +26,9 @@ Discord bot to track and manage a ladder tournament
         - preferred server
     - info
     - history
+- Hook into MongoDB Atlas as a data source
+- Create tunable settings
 
 ## Other ideas
 
-- Consider switching rankings from yaml to sqlite3
-
+- Hook into ChatGPT/OpenAI to interpret user messages into commands

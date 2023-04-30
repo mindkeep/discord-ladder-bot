@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	Token      string `yaml:"token"`
-	LadderMode string `yaml:"ladder_mode"`
+	DiscordToken string `yaml:"discord_token"`
+	LadderMode   string `yaml:"ladder_mode"`
+	//OpenAIKey    string `yaml:"openai_key"`
 }
 
 // function that reads a json file and returns a Config struct
