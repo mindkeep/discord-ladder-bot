@@ -14,6 +14,7 @@ import (
 type RankingData struct {
 	Version  string               `yaml:"version"`
 	Channels []ChannelRankingData `yaml:"channels"`
+	path     string
 	mutex    sync.Mutex
 }
 
@@ -60,6 +61,7 @@ func ReadRankingData(path string) (*RankingData, error) {
 	yamlBytes, _ := io.ReadAll(yamlFile)
 	var rankingData RankingData
 	err = yaml.Unmarshal(yamlBytes, &rankingData)
+	rankingData.path = path
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +70,7 @@ func ReadRankingData(path string) (*RankingData, error) {
 }
 
 // function that writes a RankingData struct to a json file
-func (rankingData *RankingData) Write(path string) error {
+func (rankingData *RankingData) Write() error {
 
 	//lock all the mutexes
 	rankingData.mutex.Lock()
@@ -83,7 +85,7 @@ func (rankingData *RankingData) Write(path string) error {
 		return err
 	}
 
-	yamlFile, err := os.Create(path)
+	yamlFile, err := os.Create(rankingData.path)
 	if err != nil {
 		return err
 	}
@@ -166,12 +168,14 @@ func maxPosInTier(tier int) int {
 	return pos
 }
 
+// Position sorting functions
 type byPosition []Player
 
 func (a byPosition) Len() int           { return len(a) }
 func (a byPosition) Less(i, j int) bool { return a[i].Position < a[j].Position }
 func (a byPosition) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
+// private function that sorts the players by position and fixes any gaps
 func (channel *ChannelRankingData) fixPositions() {
 
 	// sort the players by position
@@ -226,6 +230,34 @@ func (rankingData *RankingData) AddChannel(channelID string) error {
 			ResultHistory:    []ResultHistory{},
 		})
 	return nil
+}
+
+// function that removes a channel from the ranking data
+func (rankingData *RankingData) RemoveChannel(channelID string) error {
+	rankingData.mutex.Lock()
+	defer rankingData.mutex.Unlock()
+
+	// return an error if the channel is not present
+	if _, err := rankingData.findChannel(channelID); err != nil {
+		return err
+	}
+
+	// remove the channel from the ranking data
+	for i := range rankingData.Channels {
+		if rankingData.Channels[i].ChannelID == channelID {
+			rankingData.Channels = append(rankingData.Channels[:i], rankingData.Channels[i+1:]...)
+			return nil
+		}
+	}
+	return errors.New("channel not found")
+}
+
+// function that finds a channel in a RankingData struct
+func (rankingData *RankingData) FindChannel(channelID string) (*ChannelRankingData, error) {
+	rankingData.mutex.Lock()
+	defer rankingData.mutex.Unlock()
+
+	return rankingData.findChannel(channelID)
 }
 
 // function that adds a new player to the ranking data channel
@@ -311,7 +343,7 @@ func (channel *ChannelRankingData) MovePlayer(playerID string, newPosition int) 
 }
 
 // function that starts a challenge
-func (channel *ChannelRankingData) StartChallenge(channelID string, challengerID string, challengeeID string) error {
+func (channel *ChannelRankingData) StartChallenge(challengerID string, challengeeID string) error {
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 

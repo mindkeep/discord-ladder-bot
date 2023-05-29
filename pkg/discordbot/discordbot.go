@@ -2,15 +2,22 @@ package discordbot
 
 import (
 	"discord_ladder_bot/pkg/rankingdata"
-	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
 
+type Command struct {
+	Names       []string
+	Description string
+	Usage       string
+	Handler     func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error)
+}
+
 type DiscordBot struct {
 	Discord     *discordgo.Session
 	RankingData *rankingdata.RankingData
+	Commands    map[string]*Command
 }
 
 func NewDiscordBot(token string, rankingPath string) (*DiscordBot, error) {
@@ -24,12 +31,193 @@ func NewDiscordBot(token string, rankingPath string) (*DiscordBot, error) {
 	if err != nil {
 		return nil, err
 	}
+	bot := &DiscordBot{
+		Discord:     discord,
+		RankingData: rankingDataPtr,
+		Commands:    make(map[string]*Command),
+	}
 
-	return &DiscordBot{Discord: discord, RankingData: rankingDataPtr}, nil
+	bot.registerCommand(
+		[]string{"help"},
+		"Help is on the way!",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			var response string
+			for _, command := range bot.Commands {
+				response += "!" + strings.Join(command.Names, " !") + "\n"
+				response += "\t" + command.Description + "\n"
+			}
+			return response, nil
+		})
+
+	bot.registerCommand(
+		[]string{"init"},
+		"Initialize a 1v1 ranking tournament.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			if c != nil {
+				return "Channel already initialized. If you'd like to reset, use !delete_tournament and then !init.", nil
+			} else {
+				err := bot.RankingData.AddChannel(m.ChannelID)
+				if err != nil {
+					return "", err
+				}
+			}
+			return "Channel initialized!", nil
+		})
+
+	bot.registerCommand(
+		[]string{"register", "join", "add"},
+		"Register a user to a 1v1 ranking tournament.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			var playerID string
+			if len(m.Mentions) > 1 {
+				return "You can only register one user at a time.", nil
+			} else if len(m.Mentions) == 1 {
+				playerID = m.Mentions[0].ID
+			} else {
+				playerID = m.Message.Author.ID
+			}
+			err := c.AddPlayer(playerID)
+			if err != nil {
+				return "", err
+			}
+			return "Registered!", nil
+		})
+
+	bot.registerCommand(
+		[]string{"unregister", "leave", "remove", "quit"},
+		"Unregister a user from a 1v1 ranking tournament.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			var playerID string
+			if len(m.Mentions) > 1 {
+				return "You can only unregister one user at a time.", nil
+			} else if len(m.Mentions) == 1 {
+				playerID = m.Mentions[0].ID
+			} else {
+				playerID = m.Message.Author.ID
+			}
+			err := c.RemovePlayer(playerID)
+			if err != nil {
+				return "", err
+			}
+			return "Unregistered!", nil
+		})
+
+	bot.registerCommand(
+		[]string{"challenge"},
+		"Challenge a 1v1 ranking tournament.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			if len(m.Mentions) != 1 {
+				return "Please @ mention one person to challenge.", err
+			} else {
+				err := c.StartChallenge(m.Author.ID, m.Mentions[0].ID)
+				if err != nil {
+					return "", err
+				}
+			}
+			return "Challenge started!", nil
+		})
+
+	bot.registerCommand(
+		[]string{"result"},
+		"Report a result of a challenge using one of: w, win, l, lost, f, forfeit.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			words := strings.Split(m.Content, " ")
+			if len(words) >= 3 {
+				return "Please use one of: w, win, l, lost, f, forfeit.", nil
+			}
+			result := words[1]
+			switch result {
+			case "w":
+				result = "win"
+			case "l":
+				result = "lost"
+			case "f":
+				result = "forfeit"
+			}
+			err := c.ResolveChallenge(m.Author.ID, result)
+			if err != nil {
+				return "", err
+			}
+			return "Challenge has been resolved... somehow, TODO, add something clever...", nil
+		})
+
+	bot.registerCommand(
+		[]string{"delete_tournament"},
+		"Delete a 1v1 ranking tournament.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			err := bot.RankingData.RemoveChannel(m.ChannelID)
+			if err != nil {
+				return "", err
+			}
+			return "Channel deleted!", nil
+		})
+
+	bot.registerCommand(
+		[]string{"cancel"},
+		"Cancel a challenge",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			err := c.ResolveChallenge(m.Author.ID, "cancel")
+			if err != nil {
+				return "", err
+			}
+			return "Challenge canceled!", nil
+		})
+
+	bot.registerCommand(
+		[]string{"ladder"},
+		"Display the current tournament ladder state.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			return "TODO", nil
+		})
+
+	bot.registerCommand(
+		[]string{"active", "challenges"},
+		"Display the current active challenges.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			return "TODO", nil
+		})
+
+	bot.registerCommand(
+		[]string{"set"},
+		"Print or adjust game settings.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			return "TODO", nil
+		})
+
+	bot.registerCommand(
+		[]string{"ping"},
+		"Ping the bot.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			return "Pong!", nil
+		})
+
+	bot.registerCommand(
+		[]string{"pong"},
+		"Pong the bot.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			return "Ping!", nil
+		})
+
+	return bot, nil
+}
+
+// private function to register a command and map aliases
+func (bot *DiscordBot) registerCommand(names []string, description string,
+	handler func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error)) {
+	// create a command struct
+	command := Command{
+		Names:       names,
+		Description: description,
+		Handler:     handler,
+	}
+	//map all the commands to the command struct
+	for _, name := range names {
+		bot.Commands[name] = &command
+	}
 }
 
 func (bot *DiscordBot) Start() error {
-	bot.Discord.AddHandler(handleMessageCreate)
+	bot.Discord.AddHandler(bot.handleMessageCreate)
 	err := bot.Discord.Open()
 	if err != nil {
 		return err
@@ -41,34 +229,11 @@ func (bot *DiscordBot) Stop() {
 	bot.Discord.Close()
 }
 
-func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func (bot *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Ignore all messages created by the bot itself
 	if m.Author.ID == s.State.User.ID {
 		//fmt.Println("Ignoring message from self")
 		return
-	}
-
-	//dump some info about the message
-	fmt.Println("Message received:")
-	fmt.Println("  Author ID: " + m.Author.ID)
-	fmt.Println("  Author Username: " + m.Author.Username)
-	fmt.Println("  Guild: " + m.GuildID)
-	fmt.Println("  Channel: " + m.ChannelID)
-
-	fmt.Println("  Content: " + m.Content)
-	fmt.Println("  m: " + m.ContentWithMentionsReplaced())
-	fmt.Println("  Mentions:")
-	for _, name := range m.Mentions {
-		fmt.Println("    " + name.Username)
-	}
-	fmt.Println("  Mentions Everyone: " + fmt.Sprint(m.MentionEveryone))
-	fmt.Println("  Mentions Roles:")
-	for _, role := range m.MentionRoles {
-		fmt.Println("    " + role)
-	}
-	fmt.Println("  Mentions Channels:")
-	for _, channel := range m.MentionChannels {
-		fmt.Println("    " + channel.Name)
 	}
 
 	// If the message is addressed to the bot, then respond.
@@ -79,56 +244,37 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// If the message begins to a !, then try to map it to an action.
 	if strings.HasPrefix(m.Content, "!") {
+
 		// split message content into word list
 		words := strings.Split(strings.ToLower(m.Content), " ")
-
 		command := words[0][1:]
-		_, _ = s.ChannelMessageSend(m.ChannelID, "Command: "+command)
-		switch command {
-		case "help":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Help is on the way!")
-		case "register", "join", "add":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Registering...")
-		case "challenge":
-			if len(m.Mentions) == 1 {
-				_, _ = s.ChannelMessageSend(m.ChannelID, "Challenging "+m.Mentions[0].Username+"...")
-			} else {
-				_, _ = s.ChannelMessageSend(m.ChannelID, "Please mention one person to challenge.")
-			}
-		case "result":
-			if len(words) >= 3 {
-				_, _ = s.ChannelMessageSend(m.ChannelID, "Please use one of: w, win, l, lose, f, forfeit.")
-			} else {
-				switch words[1] {
-				case "w", "win":
-					_, _ = s.ChannelMessageSend(m.ChannelID, "Recording win...")
-				case "l", "lose":
-					_, _ = s.ChannelMessageSend(m.ChannelID, "Recording loss...")
-				case "f", "forfeit":
-				default:
-					_, _ = s.ChannelMessageSend(m.ChannelID, "Please use one of: w, win, l, lose, f, forfeit.")
-				}
-			}
-		case "cancel":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Cancelling...")
-		case "ladder":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Printing ladder...")
-		case "history":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Printing history...")
-		case "active", "challenges":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Printing active challenges...")
-		case "set":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Setting variable to value...")
-		case "unset":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Unsetting variable...")
-		case "quit":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Quitting...")
-		case "ping":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Pong!")
-		case "pong":
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Ping!")
-		default:
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Unknown command.")
+
+		// find the channel in the ranking data, or initialize it if the command is "init"
+		channel, err := bot.RankingData.FindChannel(m.ChannelID)
+		if err != nil && command != "init" && command != "help" {
+			_, _ = s.ChannelMessageSend(m.ChannelID, err.Error())
+			return
 		}
+
+		// check if the command exists
+		if _, ok := bot.Commands[command]; !ok {
+			_, _ = s.ChannelMessageSend(m.ChannelID, "Unknown command.")
+			command = "help"
+			if _, help_found := bot.Commands[command]; !help_found {
+				_, _ = s.ChannelMessageSend(m.ChannelID, "And there is no help for you either! (sounds like a bad day...)")
+				return
+			}
+		}
+		// execute the command
+		response, err := bot.Commands[command].Handler(channel, m)
+		if err != nil {
+			_, _ = s.ChannelMessageSend(m.ChannelID,
+				command+" returned with the following error:\n"+err.Error())
+		} else {
+			_, _ = s.ChannelMessageSend(m.ChannelID, response)
+		}
+
+		// save early and often?
+		bot.RankingData.Write()
 	}
 }
