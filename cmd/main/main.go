@@ -16,9 +16,6 @@ func main() {
 	// Note: When run from a container, this will need to be mounted in as a secret.
 	configPathPtr := flag.String("config", "config.yml", "Path to the config file.")
 
-	// TODO: convert this into a function that takes the mongodb key and returns a pointer to the database.
-	rankingPathPtr := flag.String("ranking", "ranking.yml", "Path to the ranking file.")
-
 	flag.Parse()
 
 	conf, err := config.ReadConfig(*configPathPtr)
@@ -27,7 +24,7 @@ func main() {
 	}
 
 	// TODO: pass in database pointer and maybe OpenAI client pointer.
-	discord, err := discordbot.NewDiscordBot(conf.DiscordToken, *rankingPathPtr)
+	discord, err := discordbot.NewDiscordBot(conf)
 	if err != nil {
 		panic(err)
 	}

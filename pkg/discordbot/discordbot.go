@@ -1,6 +1,7 @@
 package discordbot
 
 import (
+	"discord_ladder_bot/pkg/config"
 	"discord_ladder_bot/pkg/rankingdata"
 	"strings"
 
@@ -20,14 +21,14 @@ type DiscordBot struct {
 	Commands    map[string]*Command
 }
 
-func NewDiscordBot(token string, rankingPath string) (*DiscordBot, error) {
-	discord, err := discordgo.New("Bot " + token)
+func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
+	discord, err := discordgo.New("Bot " + conf.DiscordToken)
 	if err != nil {
 		return nil, err
 	}
 	//discord.LogLevel = discordgo.LogInformational
 
-	rankingDataPtr, err := rankingdata.ReadRankingData(rankingPath)
+	rankingDataPtr, err := rankingdata.ReadRankingData(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -270,6 +271,7 @@ func (bot *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.Me
 		if err != nil {
 			_, _ = s.ChannelMessageSend(m.ChannelID,
 				command+" returned with the following error:\n"+err.Error())
+			return
 		} else {
 			_, _ = s.ChannelMessageSend(m.ChannelID, response)
 		}

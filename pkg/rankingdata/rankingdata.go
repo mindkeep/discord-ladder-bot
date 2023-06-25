@@ -1,99 +1,117 @@
 package rankingdata
 
 import (
+	"context"
 	"errors"
-	"io"
-	"os"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"discord_ladder_bot/pkg/config"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type RankingData struct {
-	Version  string               `yaml:"version"`
-	Channels []ChannelRankingData `yaml:"channels"`
-	path     string
+	Version  string                `bson:"version,omitempty"`
+	Channels []*ChannelRankingData `bson:"channels"`
+	conf     *config.Config
 	mutex    sync.Mutex
 }
 
 type ChannelRankingData struct {
-	ChannelID        string          `yaml:"channel_id"`
-	ChallengeMode    string          `yaml:"challenge_mode"`
-	RankedPlayers    []Player        `yaml:"ranked_players"`
-	ActiveChallenges []Challenge     `yaml:"active_challenges"`
-	ResultHistory    []ResultHistory `yaml:"result_history"`
+	ChannelID        string          `bson:"channel_id"`
+	ChallengeMode    string          `bson:"challenge_mode"`
+	RankedPlayers    []Player        `bson:"ranked_players"`
+	ActiveChallenges []Challenge     `bson:"active_challenges"`
+	ResultHistory    []ResultHistory `bson:"result_history"`
 	mutex            sync.Mutex
 }
 
 type Player struct {
-	PlayerID        string `yaml:"player_id"`
-	Status          string `yaml:"status"`
-	Position        int    `yaml:"position"`
-	TimeZone        string `yaml:"time_zone,optional"`
-	PrefferedServer string `yaml:"preffered_server,optional"`
+	PlayerID        string `bson:"player_id"`
+	Status          string `bson:"status,omitempty"`
+	Position        int    `bson:"position"`
+	TimeZone        string `bson:"time_zone,optional,omitempty"`
+	PrefferedServer string `bson:"preffered_server,omitempty"`
 }
 
 type Challenge struct {
-	ChallengerID      string    `yaml:"challenger_id"`
-	ChallengeeID      string    `yaml:"challengee_id"`
-	ChallengeDate     time.Time `yaml:"challenge_date"`
-	ChallengeDeadline time.Time `yaml:"challenge_deadline"`
+	ChallengerID      string    `bson:"challenger_id"`
+	ChallengeeID      string    `bson:"challengee_id"`
+	ChallengeDate     time.Time `bson:"challenge_date"`
+	ChallengeDeadline time.Time `bson:"challenge_deadline"`
 }
 
 type ResultHistory struct {
-	Challenger    string    `yaml:"challenger"`
-	Challengee    string    `yaml:"challengee"`
-	Result        string    `yaml:"result"`
-	ChallengeDate time.Time `yaml:"challenge_date"`
-	ResolveDate   time.Time `yaml:"resolve_date"`
+	Challenger    string    `bson:"challenger"`
+	Challengee    string    `bson:"challengee"`
+	Result        string    `bson:"result"`
+	ChallengeDate time.Time `bson:"challenge_date,omitempty"`
+	ResolveDate   time.Time `bson:"resolve_date,omitempty"`
 }
 
-// function that reads a json file and returns a RankingData struct
-func ReadRankingData(path string) (*RankingData, error) {
-	yamlFile, err := os.Open(path)
+// function that reads a mongodb and returns a RankingData struct
+func ReadRankingData(conf *config.Config) (*RankingData, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(conf.MongoURI))
 	if err != nil {
 		return nil, err
 	}
-	defer yamlFile.Close()
+	defer client.Disconnect(ctx)
 
-	yamlBytes, _ := io.ReadAll(yamlFile)
-	var rankingData RankingData
-	err = yaml.Unmarshal(yamlBytes, &rankingData)
-	rankingData.path = path
+	rankingData := RankingData{conf: conf}
+	rankingData.Channels = make([]*ChannelRankingData, 0)
+
+	db := client.Database(conf.MongoDBName)
+	collection := db.Collection(conf.MongoCollectionName)
+	cursor, err := collection.Find(ctx, bson.M{})
 	if err != nil {
-		return nil, err
+		fmt.Println("Warning: No ranking data found, creating new collection")
+		// return an empty ranking data
+		return &rankingData, nil
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		channelRankingData := ChannelRankingData{}
+		err := cursor.Decode(&channelRankingData)
+		if err != nil {
+			return nil, err
+		}
+		rankingData.Channels = append(rankingData.Channels, &channelRankingData)
 	}
 
 	return &rankingData, nil
 }
 
-// function that writes a RankingData struct to a json file
+// function that writes a RankingData struct to a mongodb
 func (rankingData *RankingData) Write() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	//lock all the mutexes
-	rankingData.mutex.Lock()
-	defer rankingData.mutex.Unlock()
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(rankingData.conf.MongoURI))
+	if err != nil {
+		return err
+	}
+	defer client.Disconnect(ctx)
+
+	collection := client.Database(rankingData.conf.MongoDBName).Collection(rankingData.conf.MongoCollectionName)
+	// delete all documents in the collection, ignore errors for empty results
+	_ = collection.Drop(ctx)
+
+	// insert each channel into the collection
 	for i := range rankingData.Channels {
-		rankingData.Channels[i].mutex.Lock()
-		defer rankingData.Channels[i].mutex.Unlock()
-	}
-
-	yamlBytes, err := yaml.Marshal(rankingData)
-	if err != nil {
-		return err
-	}
-
-	yamlFile, err := os.Create(rankingData.path)
-	if err != nil {
-		return err
-	}
-	defer yamlFile.Close()
-
-	_, err = yamlFile.Write(yamlBytes)
-	if err != nil {
-		return err
+		channel := &rankingData.Channels[i]
+		_, err := collection.InsertOne(ctx, channel)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -108,7 +126,7 @@ func (rankingData *RankingData) Write() error {
 // function that finds a channel in a RankingData struct
 func (rankingData *RankingData) findChannel(channelID string) (*ChannelRankingData, error) {
 	for i := range rankingData.Channels {
-		channel := &rankingData.Channels[i]
+		channel := rankingData.Channels[i]
 		if channel.ChannelID == channelID {
 			return channel, nil
 		}
@@ -198,16 +216,16 @@ func (rankingData *RankingData) PrintRaw() (string, error) {
 	defer rankingData.mutex.Unlock()
 
 	for i := range rankingData.Channels {
-		channel := &rankingData.Channels[i]
+		channel := rankingData.Channels[i]
 		channel.mutex.Lock()
 		defer channel.mutex.Unlock()
 	}
 
-	yamlBytes, err := yaml.Marshal(rankingData)
+	bsonBytes, err := bson.Marshal(rankingData)
 	if err != nil {
 		return "", err
 	}
-	return string(yamlBytes), err
+	return string(bsonBytes), err
 }
 
 // function that adds a new channel to the ranking data
@@ -222,7 +240,7 @@ func (rankingData *RankingData) AddChannel(channelID string) error {
 
 	// add the channel to the ranking data
 	rankingData.Channels = append(rankingData.Channels,
-		ChannelRankingData{
+		&ChannelRankingData{
 			ChannelID:        channelID,
 			ChallengeMode:    "ladder",
 			RankedPlayers:    []Player{},

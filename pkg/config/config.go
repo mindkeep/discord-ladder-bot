@@ -8,24 +8,29 @@ import (
 )
 
 type Config struct {
-	DiscordToken string `yaml:"discord_token"`
-	LadderMode   string `yaml:"ladder_mode"`
-	//OpenAIKey    string `yaml:"openai_key"`
+	DiscordToken        string `yaml:"discord_token"`
+	LadderMode          string `yaml:"ladder_mode"`
+	OpenAIKey           string `yaml:"openai_key"`
+	MongoDBName         string `yaml:"mongo_db"`
+	MongoAdmin          string `yaml:"mongo_admin"`
+	MongoPass           string `yaml:"mongo_pass"`
+	MongoURI            string `yaml:"mongo_uri"`
+	MongoCollectionName string `yaml:"mongo_collection_name"`
 }
 
 // function that reads a json file and returns a Config struct
-func ReadConfig(path string) (Config, error) {
+func ReadConfig(path string) (*Config, error) {
+	conf := &Config{}
 	jsonFile, err := os.Open(path)
 	if err != nil {
-		return Config{}, err
+		return nil, err
 	}
 	defer jsonFile.Close()
 
 	bytes, _ := io.ReadAll(jsonFile)
-	var conf Config
-	err = yaml.Unmarshal(bytes, &conf)
+	err = yaml.Unmarshal(bytes, conf)
 	if err != nil {
-		return Config{}, err
+		return nil, err
 	}
 
 	return conf, nil

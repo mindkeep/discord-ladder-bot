@@ -77,7 +77,7 @@ func TestAddPlayer(t *testing.T) {
 
 	data := RankingData{
 		Version: "v1_test",
-		Channels: []ChannelRankingData{
+		Channels: []*ChannelRankingData{
 			{ChannelID: "1234", RankedPlayers: []Player{
 				{PlayerID: "1234", Status: "active", Position: 1},
 				{PlayerID: "5678", Status: "active", Position: 2},
@@ -111,7 +111,7 @@ func TestAddPlayer(t *testing.T) {
 func TestRemovePlayer(t *testing.T) {
 	data := RankingData{
 		Version: "v1_test",
-		Channels: []ChannelRankingData{
+		Channels: []*ChannelRankingData{
 			{ChannelID: "1234", RankedPlayers: []Player{
 				{PlayerID: "1234", Status: "active", Position: 1},
 				{PlayerID: "5678", Status: "active", Position: 2},
