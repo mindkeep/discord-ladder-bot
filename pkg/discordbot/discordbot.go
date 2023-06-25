@@ -121,7 +121,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		})
 
 	bot.registerCommand(
-		[]string{"result"},
+		[]string{"result", "results"},
 		"Report a result of a challenge using one of: w, win, l, lost, f, forfeit.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 			words := strings.Split(m.Content, " ")
