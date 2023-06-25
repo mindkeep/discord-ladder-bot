@@ -26,6 +26,8 @@ Discord bot to track and manage a ladder tournament
     - print tournament standings
     - result history
 - add user controls for admin users
+- periodic checks for match timeout
+- periodic checks for players that have left the server
 
 
 ## Other ideas
