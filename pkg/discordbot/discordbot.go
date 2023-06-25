@@ -18,7 +18,8 @@ type Command struct {
 type DiscordBot struct {
 	Discord     *discordgo.Session
 	RankingData *rankingdata.RankingData
-	Commands    map[string]*Command
+	commandMap  map[string]*Command
+	commands    []*Command
 }
 
 func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
@@ -35,7 +36,8 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 	bot := &DiscordBot{
 		Discord:     discord,
 		RankingData: rankingDataPtr,
-		Commands:    make(map[string]*Command),
+		commandMap:  make(map[string]*Command),
+		commands:    make([]*Command, 0),
 	}
 
 	bot.registerCommand(
@@ -43,7 +45,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		"Help is on the way!",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 			var response string
-			for _, command := range bot.Commands {
+			for _, command := range bot.commands {
 				response += "!" + strings.Join(command.Names, " !") + "\n"
 				response += "\t" + command.Description + "\n"
 			}
@@ -123,7 +125,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		"Report a result of a challenge using one of: w, win, l, lost, f, forfeit.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 			words := strings.Split(m.Content, " ")
-			if len(words) >= 3 {
+			if len(words) != 2 {
 				return "Please use one of: w, win, l, lost, f, forfeit.", nil
 			}
 			result := words[1]
@@ -185,20 +187,6 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			return "TODO", nil
 		})
 
-	bot.registerCommand(
-		[]string{"ping"},
-		"Ping the bot.",
-		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-			return "Pong!", nil
-		})
-
-	bot.registerCommand(
-		[]string{"pong"},
-		"Pong the bot.",
-		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-			return "Ping!", nil
-		})
-
 	return bot, nil
 }
 
@@ -211,9 +199,11 @@ func (bot *DiscordBot) registerCommand(names []string, description string,
 		Description: description,
 		Handler:     handler,
 	}
+	// add the command to the list of commands
+	bot.commands = append(bot.commands, &command)
 	//map all the commands to the command struct
 	for _, name := range names {
-		bot.Commands[name] = &command
+		bot.commandMap[name] = &command
 	}
 }
 
@@ -258,16 +248,16 @@ func (bot *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.Me
 		}
 
 		// check if the command exists
-		if _, ok := bot.Commands[command]; !ok {
+		if _, ok := bot.commandMap[command]; !ok {
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Unknown command.")
 			command = "help"
-			if _, help_found := bot.Commands[command]; !help_found {
+			if _, help_found := bot.commandMap[command]; !help_found {
 				_, _ = s.ChannelMessageSend(m.ChannelID, "And there is no help for you either! (sounds like a bad day...)")
 				return
 			}
 		}
 		// execute the command
-		response, err := bot.Commands[command].Handler(channel, m)
+		response, err := bot.commandMap[command].Handler(channel, m)
 		if err != nil {
 			_, _ = s.ChannelMessageSend(m.ChannelID,
 				command+" returned with the following error:\n"+err.Error())
