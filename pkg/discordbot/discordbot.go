@@ -22,6 +22,7 @@ type DiscordBot struct {
 	commands    []*Command
 }
 
+// NewDiscordBot creates a new DiscordBot instance
 func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 	discord, err := discordgo.New("Bot " + conf.DiscordToken)
 	if err != nil {
@@ -170,14 +171,21 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		[]string{"ladder"},
 		"Display the current tournament ladder state.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-			return "TODO", nil
+			return c.PrintLadder()
 		})
 
 	bot.registerCommand(
 		[]string{"active", "challenges"},
 		"Display the current active challenges.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-			return "TODO", nil
+			return c.PrintChallenges()
+		})
+
+	bot.registerCommand(
+		[]string{"history"},
+		"Display the history of the tournament.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			return c.PrintHistory()
 		})
 
 	bot.registerCommand(
@@ -185,6 +193,13 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		"Print or adjust game settings.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 			return "TODO", nil
+		})
+
+	bot.registerCommand(
+		[]string{"printraw"},
+		"Print the raw data for the channel.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			return c.PrintRaw()
 		})
 
 	return bot, nil
@@ -207,6 +222,7 @@ func (bot *DiscordBot) registerCommand(names []string, description string,
 	}
 }
 
+// Start the bot
 func (bot *DiscordBot) Start() error {
 	bot.Discord.AddHandler(bot.handleMessageCreate)
 	err := bot.Discord.Open()
@@ -216,10 +232,12 @@ func (bot *DiscordBot) Start() error {
 	return nil
 }
 
+// Stop the bot
 func (bot *DiscordBot) Stop() {
 	bot.Discord.Close()
 }
 
+// Handle a message create event
 func (bot *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Ignore all messages created by the bot itself
 	if m.Author.ID == s.State.User.ID {

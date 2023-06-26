@@ -47,8 +47,8 @@ type Challenge struct {
 }
 
 type ResultHistory struct {
-	Challenger    string    `bson:"challenger"`
-	Challengee    string    `bson:"challengee"`
+	ChallengerID  string    `bson:"challenger_id"`
+	ChallengeeID  string    `bson:"challengee_id"`
 	Result        string    `bson:"result"`
 	ChallengeDate time.Time `bson:"challenge_date,omitempty"`
 	ResolveDate   time.Time `bson:"resolve_date,omitempty"`
@@ -210,22 +210,73 @@ func (channel *ChannelRankingData) fixPositions() {
 //
 
 // function that prints a RankingData struct
-func (rankingData *RankingData) PrintRaw() (string, error) {
-	//lock all the mutexes
-	rankingData.mutex.Lock()
-	defer rankingData.mutex.Unlock()
+func (channel *ChannelRankingData) PrintRaw() (string, error) {
+	//lock the mutex
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
 
-	for i := range rankingData.Channels {
-		channel := rankingData.Channels[i]
-		channel.mutex.Lock()
-		defer channel.mutex.Unlock()
-	}
-
-	bsonBytes, err := bson.Marshal(rankingData)
+	bsonBytes, err := bson.MarshalExtJSON(channel, false, false)
 	if err != nil {
 		return "", err
 	}
 	return string(bsonBytes), err
+}
+
+// function that returns a Discord formatted string of the ranking ladder
+func (channel *ChannelRankingData) PrintLadder() (string, error) {
+	//lock the mutex
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	var response string
+	// walk through the players and build the string
+	for i, player := range channel.RankedPlayers {
+		chal, err := channel.findChallenge(player.PlayerID)
+		if err != nil {
+			// player is not in a challenge
+			response += fmt.Sprintf("%d. <@%s>\n", i+1, player.PlayerID)
+		} else {
+			if chal.ChallengerID == player.PlayerID {
+				// player is the challenger
+				response += fmt.Sprintf("%d. <@%s> (vs <@%s>)\n", i+1, player.PlayerID, chal.ChallengeeID)
+			} else {
+				// player is the challengee
+				response += fmt.Sprintf("%d. <@%s> (vs <@%s>)\n", i+1, player.PlayerID, chal.ChallengerID)
+			}
+		}
+	}
+
+	return response, nil
+}
+
+// function that returns a Discord formatted string of the active challenges
+func (channel *ChannelRankingData) PrintChallenges() (string, error) {
+	//lock the mutex
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	var response string
+	// walk through the challenges and build the string
+	for _, challenge := range channel.ActiveChallenges {
+		response += fmt.Sprintf("<@%s> vs <@%s>\n", challenge.ChallengerID, challenge.ChallengeeID)
+	}
+
+	return response, nil
+}
+
+// function that returns a Discord formatted string of the result history
+func (channel *ChannelRankingData) PrintHistory() (string, error) {
+	//lock the mutex
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	var response string
+	// walk through the result history and build the string
+	for _, result := range channel.ResultHistory {
+		response += fmt.Sprintf("<@%s> %s vs <@%s>\n", result.ChallengerID, result.Result, result.ChallengeeID)
+	}
+
+	return response, nil
 }
 
 // function that adds a new channel to the ranking data
@@ -452,8 +503,8 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 	// add the result to the history
 	channel.ResultHistory = append(channel.ResultHistory,
 		ResultHistory{
-			Challenger:    challenge.ChallengerID,
-			Challengee:    challenge.ChallengeeID,
+			ChallengerID:  challenge.ChallengerID,
+			ChallengeeID:  challenge.ChallengeeID,
 			Result:        action,
 			ChallengeDate: challenge.ChallengeDate,
 			ResolveDate:   time.Now(),
