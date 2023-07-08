@@ -23,7 +23,6 @@ Discord bot to track and manage a ladder tournament
 
 ## TODO
 
-- refactor command handlers into real functions
 - add more unit tests (the neverending TODO)
 - change commands into discord slash commands
 
