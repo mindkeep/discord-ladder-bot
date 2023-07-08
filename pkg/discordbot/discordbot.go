@@ -3,7 +3,10 @@ package discordbot
 import (
 	"discord_ladder_bot/pkg/config"
 	"discord_ladder_bot/pkg/rankingdata"
+	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -13,6 +16,7 @@ type Command struct {
 	Description string
 	Usage       string
 	Handler     func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error)
+	Privledged  bool
 }
 
 type DiscordBot struct {
@@ -48,10 +52,14 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			var response string
 			for _, command := range bot.commands {
 				response += "!" + strings.Join(command.Names, " !") + "\n"
+				if command.Privledged {
+					response += "\t\t(admin only)\n"
+				}
 				response += "\t" + command.Description + "\n"
 			}
 			return response, nil
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"init"},
@@ -60,13 +68,14 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			if c != nil {
 				return "Channel already initialized. If you'd like to reset, use !delete_tournament and then !init.", nil
 			} else {
-				err := bot.RankingData.AddChannel(m.ChannelID)
+				err := bot.RankingData.AddChannel(m.ChannelID, m.Author.ID)
 				if err != nil {
 					return "", err
 				}
 			}
 			return "Channel initialized!", nil
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"register", "join", "add"},
@@ -85,7 +94,8 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 				return "", err
 			}
 			return "Registered!", nil
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"unregister", "leave", "remove", "quit"},
@@ -104,7 +114,8 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 				return "", err
 			}
 			return "Unregistered!", nil
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"challenge"},
@@ -119,21 +130,28 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 				}
 			}
 			return "Challenge started!", nil
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"result", "results"},
-		"Report a result of a challenge using one of: w, win, l, lost, f, forfeit.",
+		"Report a result of a challenge using one of: w, won, l, lost, f, forfeit.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 			words := strings.Split(m.Content, " ")
 			if len(words) != 2 {
-				return "Please use one of: w, win, l, lost, f, forfeit.", nil
+				return "Please use one of: w, won, l, lost, f, forfeit.", nil
 			}
 			result := words[1]
 			switch result {
 			case "w":
-				result = "win"
+				result = "won"
+			case "win":
+				result = "won"
 			case "l":
+				result = "lost"
+			case "loss":
+				result = "lost"
+			case "lose":
 				result = "lost"
 			case "f":
 				result = "forfeit"
@@ -143,7 +161,8 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 				return "", err
 			}
 			return "Challenge has been resolved... somehow, TODO, add something clever...", nil
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"delete_tournament"},
@@ -154,7 +173,8 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 				return "", err
 			}
 			return "Channel deleted!", nil
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"cancel"},
@@ -165,54 +185,146 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 				return "", err
 			}
 			return "Challenge canceled!", nil
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"ladder"},
 		"Display the current tournament ladder state.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 			return c.PrintLadder()
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"active", "challenges"},
 		"Display the current active challenges.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 			return c.PrintChallenges()
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"history"},
 		"Display the history of the tournament.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 			return c.PrintHistory()
-		})
+		},
+		false)
 
 	bot.registerCommand(
 		[]string{"set"},
 		"Print or adjust game settings.",
+		// TODO: this is a mess, clean it up
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-			return "TODO", nil
-		})
+			words := strings.Split(m.Content, " ")
+			if len(words) == 1 {
+				var response string
+				response += "Game settings:\n"
+				response += fmt.Sprintf("  ChallengeMode: %s (ladder or pyramid)\n", c.ChallengeMode)
+				response += fmt.Sprintf("  ChallengeTimeoutDays: %d\n", c.ChallengeTimeoutDays)
+				response += fmt.Sprintf("  Admins: %s\n", strings.Join(c.Admins, ", "))
+				return response, nil
+			} else if strings.ToLower(words[1]) == "challengemode" {
+				if len(words) != 3 || (words[2] != "ladder" && words[2] != "pyramid") {
+					return "Please specify a ChallengeMode (ladder or pyramid).", nil
+				}
+				c.ChallengeMode = words[2]
+				return "ChallengeMode set!", nil
+			} else if strings.ToLower(words[1]) == "challengetimeoutdays" {
+				error_response := "Please specify a ChallengeTimeoutDays (integer)."
+				if len(words) != 3 {
+					return error_response, nil
+				} else {
+					timeoutDays, err := strconv.Atoi(words[2])
+					if err != nil {
+						return error_response, nil
+					}
+					c.ChallengeTimeoutDays = time.Hour * time.Duration(24*timeoutDays)
+					return "ChallengeTimeoutDays set!", nil
+				}
+			} else if strings.ToLower(words[1]) == "admins" {
+				error_response := "Please specify a command (add or remove) and a user."
+				if len(words) != 4 || len(m.Mentions) != 1 {
+					return error_response, nil
+				} else if strings.ToLower(words[2]) == "add" {
+					if !c.IsAdmin(m.Author.ID) {
+						return "You must be an admin to add admins.", nil
+					}
+					if len(c.Admins) == 0 || !c.IsAdmin(m.Mentions[0].ID) {
+						c.Admins = append(c.Admins, m.Mentions[0].ID)
+						return "Admin added!", nil
+					} else {
+						return "User is already an admin.", nil
+					}
+				} else if strings.ToLower(words[2]) == "remove" {
+					if !c.IsAdmin(m.Author.ID) {
+						return "You must be an admin to remove admins.", nil
+					}
+					if c.IsAdmin(m.Mentions[0].ID) {
+						for i, admin := range c.Admins {
+							if admin == m.Mentions[0].ID {
+								c.Admins = append(c.Admins[:i], c.Admins[i+1:]...)
+
+								return "Admin removed!", nil
+							}
+						}
+						return "User is not an admin.", nil
+					} else {
+						return "User is not an admin.", nil
+
+					}
+				} else {
+					return error_response, nil
+				}
+			} else {
+				return "Unknown setting.", nil
+			}
+		},
+		true)
+
+	bot.registerCommand(
+		[]string{"move"},
+		"Move a player to a new rank.",
+		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+			error_response := "Please specify a player and a position."
+			words := strings.Split(m.Content, " ")
+			if len(words) != 3 || len(m.Mentions) != 1 {
+				return error_response, nil
+			}
+			position, err := strconv.Atoi(words[2])
+			if err != nil {
+				return error_response, nil
+			}
+			err2 := c.MovePlayer(m.Mentions[0].ID, position)
+			if err2 != nil {
+				return "", err2
+			}
+			return "Player moved!", nil
+		},
+		true)
 
 	bot.registerCommand(
 		[]string{"printraw"},
 		"Print the raw data for the channel.",
 		func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 			return c.PrintRaw()
-		})
+		},
+		false)
 
 	return bot, nil
 }
 
 // private function to register a command and map aliases
 func (bot *DiscordBot) registerCommand(names []string, description string,
-	handler func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error)) {
+	handler func(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error),
+	privledged bool) {
 	// create a command struct
 	command := Command{
 		Names:       names,
 		Description: description,
 		Handler:     handler,
+		Privledged:  privledged,
 	}
 	// add the command to the list of commands
 	bot.commands = append(bot.commands, &command)
@@ -256,29 +368,43 @@ func (bot *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.Me
 
 		// split message content into word list
 		words := strings.Split(strings.ToLower(m.Content), " ")
-		command := words[0][1:]
+		command_key := words[0][1:]
 
+		authorIsAdmin := false
 		// find the channel in the ranking data, or initialize it if the command is "init"
 		channel, err := bot.RankingData.FindChannel(m.ChannelID)
-		if err != nil && command != "init" && command != "help" {
-			_, _ = s.ChannelMessageSend(m.ChannelID, err.Error())
-			return
+		if err != nil {
+			if command_key != "init" && command_key != "help" {
+				_, _ = s.ChannelMessageSend(m.ChannelID, err.Error())
+				return
+			}
+		} else {
+			// channel exists, check if the user is an admin
+			authorIsAdmin = channel.IsAdmin(m.Author.ID)
 		}
 
-		// check if the command exists
-		if _, ok := bot.commandMap[command]; !ok {
+		// find the command
+		command, ok := bot.commandMap[command_key]
+		if !ok {
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Unknown command.")
-			command = "help"
-			if _, help_found := bot.commandMap[command]; !help_found {
+			command_key = "help"
+			if _, help_found := bot.commandMap[command_key]; !help_found {
 				_, _ = s.ChannelMessageSend(m.ChannelID, "And there is no help for you either! (sounds like a bad day...)")
 				return
 			}
 		}
+
+		// check if the user is allowed to use the command
+		if !authorIsAdmin && command.Privledged {
+			_, _ = s.ChannelMessageSend(m.ChannelID, "You are not allowed to use this command.")
+			return
+		}
+
 		// execute the command
-		response, err := bot.commandMap[command].Handler(channel, m)
+		response, err := command.Handler(channel, m)
 		if err != nil {
 			_, _ = s.ChannelMessageSend(m.ChannelID,
-				command+" returned with the following error:\n"+err.Error())
+				command_key+" returned with the following error:\n"+err.Error())
 			return
 		} else {
 			_, _ = s.ChannelMessageSend(m.ChannelID, response)

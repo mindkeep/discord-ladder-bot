@@ -23,12 +23,14 @@ type RankingData struct {
 }
 
 type ChannelRankingData struct {
-	ChannelID        string          `bson:"channel_id"`
-	ChallengeMode    string          `bson:"challenge_mode"`
-	RankedPlayers    []Player        `bson:"ranked_players"`
-	ActiveChallenges []Challenge     `bson:"active_challenges"`
-	ResultHistory    []ResultHistory `bson:"result_history"`
-	mutex            sync.Mutex
+	ChannelID            string          `bson:"channel_id"`
+	ChallengeMode        string          `bson:"challenge_mode"`
+	ChallengeTimeoutDays time.Duration   `bson:"challenge_timeout_days"`
+	RankedPlayers        []Player        `bson:"ranked_players"`
+	ActiveChallenges     []Challenge     `bson:"active_challenges"`
+	ResultHistory        []ResultHistory `bson:"result_history"`
+	Admins               []string        `bson:"admins"`
+	mutex                sync.Mutex
 }
 
 type Player struct {
@@ -249,6 +251,25 @@ func (channel *ChannelRankingData) PrintLadder() (string, error) {
 	return response, nil
 }
 
+func (channel *ChannelRankingData) IsAdmin(playerID string) bool {
+	//lock the mutex
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	// if the admin list is empty, then everyone is an admin
+	if len(channel.Admins) == 0 {
+		return true
+	}
+
+	// walk through the admins and see if the player is in the list
+	for _, admin := range channel.Admins {
+		if admin == playerID {
+			return true
+		}
+	}
+	return false
+}
+
 // function that returns a Discord formatted string of the active challenges
 func (channel *ChannelRankingData) PrintChallenges() (string, error) {
 	//lock the mutex
@@ -280,7 +301,7 @@ func (channel *ChannelRankingData) PrintHistory() (string, error) {
 }
 
 // function that adds a new channel to the ranking data
-func (rankingData *RankingData) AddChannel(channelID string) error {
+func (rankingData *RankingData) AddChannel(channelID string, adminID string) error {
 	rankingData.mutex.Lock()
 	defer rankingData.mutex.Unlock()
 
@@ -292,11 +313,13 @@ func (rankingData *RankingData) AddChannel(channelID string) error {
 	// add the channel to the ranking data
 	rankingData.Channels = append(rankingData.Channels,
 		&ChannelRankingData{
-			ChannelID:        channelID,
-			ChallengeMode:    "ladder",
-			RankedPlayers:    []Player{},
-			ActiveChallenges: []Challenge{},
-			ResultHistory:    []ResultHistory{},
+			ChannelID:            channelID,
+			ChallengeMode:        "ladder",
+			ChallengeTimeoutDays: 7,
+			RankedPlayers:        []Player{},
+			ActiveChallenges:     []Challenge{},
+			ResultHistory:        []ResultHistory{},
+			Admins:               []string{adminID},
 		})
 	return nil
 }
@@ -460,7 +483,7 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 			ChallengerID:      challengerID,
 			ChallengeeID:      challengeeID,
 			ChallengeDate:     time.Now(),
-			ChallengeDeadline: time.Now().Add(time.Hour * 24 * 7),
+			ChallengeDeadline: time.Now().Add(channel.ChallengeTimeoutDays),
 		})
 	return nil
 }

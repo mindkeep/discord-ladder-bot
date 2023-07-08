@@ -5,30 +5,32 @@ Discord bot to track and manage a ladder tournament
 
 - connection to discord and listening/responding to commands
 - writing and reading ranking data to MongoDB
-- working commands
-    - help, provides a list of commands
-    - init, initializes ranking data for the channel
-    - delete_tournament, resets the tournament and drops data
-    - register, adds the requesting player to the ladder
-    - unregister, removes the requesting player
-    - maybe more, but need some volunteers to test things
+- commands
+    - help
+    - init
+    - delete_tournament
+    - register
+    - unregister
+    - challenge
+    - cancel
+    - forfeit
+    - result
+    - history
+    - ladder
+    - set
 - some unit testing for ranking data
+- admin id list to allow/disallow certain commands
+
+## TODO
+
+- refactor command handlers into real functions
+- add more unit tests (the neverending TODO)
+- change commands into discord slash commands
 
 ## Planned features
 
-- Bot is able to accept commands
-- implement more commands
-    - active challenges, Display the current active challenges.
-    - challenge
-    - cancel challenge
-    - report results
-    - settings
-    - print tournament standings
-    - result history
-- add user controls for admin users
 - periodic checks for match timeout
 - periodic checks for players that have left the server
-
 
 ## Other ideas
 
