@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/signal"
 
-	"discord_ladder_bot/pkg/config"
-	"discord_ladder_bot/pkg/discordbot"
+	"discord_ladder_bot/internal/config"
+	"discord_ladder_bot/internal/discordbot"
 )
 
 func main() {

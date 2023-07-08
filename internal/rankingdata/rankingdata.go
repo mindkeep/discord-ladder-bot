@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"discord_ladder_bot/pkg/config"
+	"discord_ladder_bot/internal/config"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

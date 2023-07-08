@@ -1,8 +1,8 @@
 package discordbot
 
 import (
-	"discord_ladder_bot/pkg/config"
-	"discord_ladder_bot/pkg/rankingdata"
+	"discord_ladder_bot/internal/config"
+	"discord_ladder_bot/internal/rankingdata"
 	"fmt"
 	"strconv"
 	"strings"
