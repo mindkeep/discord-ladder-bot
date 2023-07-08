@@ -35,6 +35,7 @@ type ChannelRankingData struct {
 
 type Player struct {
 	PlayerID        string `bson:"player_id"`
+	Name            string `bson:"name,omitempty"`
 	Status          string `bson:"status,omitempty"`
 	Position        int    `bson:"position"`
 	TimeZone        string `bson:"time_zone,optional,omitempty"`
@@ -353,7 +354,7 @@ func (rankingData *RankingData) FindChannel(channelID string) (*ChannelRankingDa
 }
 
 // function that adds a new player to the ranking data channel
-func (channel *ChannelRankingData) AddPlayer(playerID string) error {
+func (channel *ChannelRankingData) AddPlayer(playerID string, playerName string) error {
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 
@@ -366,6 +367,7 @@ func (channel *ChannelRankingData) AddPlayer(playerID string) error {
 	channel.RankedPlayers = append(channel.RankedPlayers,
 		Player{
 			PlayerID: playerID,
+			Name:     playerName,
 			Status:   "active",
 			Position: len(channel.RankedPlayers) + 1,
 		})

@@ -12,14 +12,21 @@ import (
 
 func handle_register(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
 	var playerID string
+	var playerName string
 	if len(m.Mentions) > 1 {
 		return "You can only register one user at a time.", nil
 	} else if len(m.Mentions) == 1 {
-		playerID = m.Mentions[0].ID
+		if c.IsAdmin(m.Message.Author.ID) {
+			playerID = m.Mentions[0].ID
+			playerName = m.Mentions[0].Username
+		} else {
+			return "You must be an admin to register other users.", nil
+		}
 	} else {
 		playerID = m.Message.Author.ID
+		playerName = m.Message.Author.Username
 	}
-	err := c.AddPlayer(playerID)
+	err := c.AddPlayer(playerID, playerName)
 	if err != nil {
 		return "", err
 	}
@@ -31,7 +38,11 @@ func handle_unregister(c *rankingdata.ChannelRankingData, m *discordgo.MessageCr
 	if len(m.Mentions) > 1 {
 		return "You can only unregister one user at a time.", nil
 	} else if len(m.Mentions) == 1 {
-		playerID = m.Mentions[0].ID
+		if c.IsAdmin(m.Message.Author.ID) {
+			playerID = m.Mentions[0].ID
+		} else {
+			return "You must be an admin to unregister other users.", nil
+		}
 	} else {
 		playerID = m.Message.Author.ID
 	}
