@@ -240,8 +240,8 @@ func (bot *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.Me
 		command, ok := bot.commandMap[command_key]
 		if !ok {
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Unknown command.")
-			command_key = "help"
-			if _, help_found := bot.commandMap[command_key]; !help_found {
+			command, ok = bot.commandMap["help"]
+			if !ok {
 				_, _ = s.ChannelMessageSend(m.ChannelID, "And there is no help for you either! (sounds like a bad day...)")
 				return
 			}
