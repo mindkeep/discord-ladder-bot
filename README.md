@@ -20,11 +20,14 @@ Discord bot to track and manage a ladder tournament
     - set
 - some unit testing for ranking data
 - admin id list to allow/disallow certain commands
+- implemented /ladder command!
 
 ## TODO
 
+- fix bugs
+- move print functions into the discordbot handlers
 - add more unit tests (the neverending TODO)
-- change commands into discord slash commands
+- cancel challenge should not be in the history
 
 ## Planned features
 

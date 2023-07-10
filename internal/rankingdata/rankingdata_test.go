@@ -79,11 +79,11 @@ func TestAddPlayer(t *testing.T) {
 		Version: "v1_test",
 		Channels: []*ChannelRankingData{
 			{ChannelID: "1234", RankedPlayers: []Player{
-				{PlayerID: "1234", Name: "A", Status: "active", Position: 1},
-				{PlayerID: "5678", Name: "A", Status: "active", Position: 2},
-				{PlayerID: "9012", Name: "A", Status: "active", Position: 3},
-				{PlayerID: "3456", Name: "A", Status: "active", Position: 4},
-				{PlayerID: "7890", Name: "A", Status: "active", Position: 5},
+				{PlayerID: "1234", Status: "active", Position: 1},
+				{PlayerID: "5678", Status: "active", Position: 2},
+				{PlayerID: "9012", Status: "active", Position: 3},
+				{PlayerID: "3456", Status: "active", Position: 4},
+				{PlayerID: "7890", Status: "active", Position: 5},
 			}}}}
 
 	channel, err := data.findChannel("1234")
@@ -92,7 +92,7 @@ func TestAddPlayer(t *testing.T) {
 		return
 	}
 
-	if err := channel.AddPlayer("1111", "Dude"); err != nil {
+	if err := channel.AddPlayer("1111"); err != nil {
 		t.Errorf("Error adding player: %s", err)
 	}
 

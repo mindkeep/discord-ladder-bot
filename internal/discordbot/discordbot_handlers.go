@@ -2,6 +2,7 @@ package discordbot
 
 import (
 	"discord_ladder_bot/internal/rankingdata"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,41 +11,46 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func handle_register(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-	var playerID string
-	var playerName string
-	if len(m.Mentions) > 1 {
-		return "You can only register one user at a time.", nil
-	} else if len(m.Mentions) == 1 {
-		if c.IsAdmin(m.Message.Author.ID) {
-			playerID = m.Mentions[0].ID
-			playerName = m.Mentions[0].Username
+func handleRegister(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	playerID := i.Member.User.ID
+	for _, option := range o {
+		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
+			// this is optional, we user the user who sent the message if not specified
+			if !c.IsAdmin(i.Member.User.ID) {
+				return "You must be an admin to register other users.", nil
+			}
+
+			playerID = option.UserValue(nil).ID
 		} else {
-			return "You must be an admin to register other users.", nil
+			return "", nil
 		}
-	} else {
-		playerID = m.Message.Author.ID
-		playerName = m.Message.Author.Username
 	}
-	err := c.AddPlayer(playerID, playerName)
+
+	err := c.AddPlayer(playerID)
 	if err != nil {
 		return "", err
 	}
 	return "Registered!", nil
 }
 
-func handle_unregister(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-	var playerID string
-	if len(m.Mentions) > 1 {
-		return "You can only unregister one user at a time.", nil
-	} else if len(m.Mentions) == 1 {
-		if c.IsAdmin(m.Message.Author.ID) {
-			playerID = m.Mentions[0].ID
+func handleUnregister(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	playerID := i.Member.User.ID
+	for _, option := range o {
+		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
+			// this is optional, we user the user who sent the message if not specified
+			if !c.IsAdmin(i.Member.User.ID) {
+				return "You must be an admin to register other users.", nil
+			}
+			playerID = option.UserValue(nil).ID
 		} else {
-			return "You must be an admin to unregister other users.", nil
+			return "", nil
 		}
-	} else {
-		playerID = m.Message.Author.ID
 	}
 	err := c.RemovePlayer(playerID)
 	if err != nil {
@@ -53,24 +59,33 @@ func handle_unregister(c *rankingdata.ChannelRankingData, m *discordgo.MessageCr
 	return "Unregistered!", nil
 }
 
-func handle_challenge(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-	if len(m.Mentions) != 1 {
-		return "Please @ mention one person to challenge.", nil
-	} else {
-		err := c.StartChallenge(m.Author.ID, m.Mentions[0].ID)
-		if err != nil {
-			return "", err
-		}
+func handleChallenge(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	if len(o) != 1 || o[0].Type != discordgo.ApplicationCommandOptionUser {
+		return "Please specify a player to challenge", nil
 	}
+	playerID := o[0].UserValue(nil).ID
+
+	err := c.StartChallenge(i.Member.User.ID, playerID)
+	if err != nil {
+		return "", err
+	}
+
 	return "Challenge started!", nil
 }
 
-func handle_result(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-	words := strings.Split(m.Content, " ")
-	if len(words) != 2 {
-		return "Please use one of: w, won, l, lost", nil
+func handleResult(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	if len(o) != 1 || o[0].Type != discordgo.ApplicationCommandOptionString {
+		return "Please specify a result (w, won, l, lost)", nil
 	}
-	result := words[1]
+	result := o[0].StringValue()
+
+	// we tried to be specific in the command, but people will still mess it up
 	switch result {
 	case "w":
 		result = "won"
@@ -83,108 +98,196 @@ func handle_result(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate
 	case "lose":
 		result = "lost"
 	}
-	err := c.ResolveChallenge(m.Author.ID, result)
+	response, err := c.ResolveChallenge(i.Member.User.ID, result)
 	if err != nil {
 		return "", err
 	}
-	return "Challenge has been resolved... somehow, TODO, add something clever...", nil
+	return response, nil
 }
 
-func handle_cancel(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-	err := c.ResolveChallenge(m.Author.ID, "cancel")
+func handleCancel(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	response, err := c.ResolveChallenge(i.Member.User.ID, "cancel")
 	if err != nil {
 		return "", err
 	}
-	return "Challenge canceled!", nil
+	return response, nil
 }
 
-func handle_forfeit(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-	err := c.ResolveChallenge(m.Author.ID, "forfeit")
+func handleForfeit(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	response, err := c.ResolveChallenge(i.Member.User.ID, "forfeit")
 	if err != nil {
 		return "", err
 	}
-	return "Challenge forfeited!", nil
+	return response, nil
 }
 
-func handle_set(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
-	words := strings.Split(m.Content, " ")
-	if len(words) == 1 {
+func handleSet(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	error_response := "Please specify user or system"
+
+	if len(o) != 1 || o[0].Type != discordgo.ApplicationCommandOptionSubCommand {
+		return error_response, nil
+	}
+	switch o[0].Name {
+	case "user":
+		return handleSetUser(c, i, o[0].Options)
+	case "system":
+		return handleSetSystem(c, i, o[0].Options)
+	default:
+		return error_response, nil
+	}
+}
+
+func handleSetUser(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	playerID := i.Member.User.ID
+	var key, value string
+	for _, option := range o {
+		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
+			// this is optional, we user the user who sent the message if not specified
+			if !c.IsAdmin(i.Member.User.ID) {
+				return "You must be an admin to set other users.", nil
+			}
+			playerID = option.UserValue(nil).ID
+		} else if option.Name == "key" && option.Type == discordgo.ApplicationCommandOptionString {
+			key = option.StringValue()
+		} else if option.Name == "value" && option.Type == discordgo.ApplicationCommandOptionString {
+			value = option.StringValue()
+		} else {
+			return "", errors.New("invalid option to set user")
+		}
+	}
+
+	switch key {
+	case "status":
+		if value != "active" && value != "inactive" {
+			return "Invalid status, must be active or inactive", nil
+		}
+		c.SetPlayerStatus(playerID, value)
+		return "Status set to " + value + "!", nil
+	case "notes":
+		if len(value) > 100 {
+			return "Notes must be less than 100 characters", nil
+		}
+		c.SetPlayerNotes(playerID, value)
+		return "Notes set to " + value + "!", nil
+	default:
+		return "Invalid key, must be status or notes", nil
+	}
+}
+
+func handleSetSystem(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	if len(o) == 0 {
 		var response string
 		response += "Game settings:\n"
-		response += fmt.Sprintf("  ChallengeMode: %s (ladder or pyramid)\n", c.ChallengeMode)
+		response += fmt.Sprintf("  ChallengeMode: %s (ladder or pyramid or open)\n", c.ChallengeMode)
 		response += fmt.Sprintf("  ChallengeTimeoutDays: %d\n", c.ChallengeTimeoutDays)
 		response += fmt.Sprintf("  Admins: %s\n", strings.Join(c.Admins, ", "))
 		return response, nil
-	} else if strings.ToLower(words[1]) == "challengemode" {
-		if len(words) != 3 || (words[2] != "ladder" && words[2] != "pyramid") {
-			return "Please specify a ChallengeMode (ladder or pyramid).", nil
-		}
-		c.ChallengeMode = words[2]
-		return "ChallengeMode set!", nil
-	} else if strings.ToLower(words[1]) == "challengetimeoutdays" {
-		error_response := "Please specify a ChallengeTimeoutDays (integer)."
-		if len(words) != 3 {
-			return error_response, nil
-		} else {
-			timeoutDays, err := strconv.Atoi(words[2])
-			if err != nil {
-				return error_response, nil
-			}
-			c.ChallengeTimeoutDays = time.Hour * time.Duration(24*timeoutDays)
-			return "ChallengeTimeoutDays set!", nil
-		}
-	} else if strings.ToLower(words[1]) == "admins" {
-		error_response := "Please specify a command (add or remove) and a user."
-		if len(words) != 4 || len(m.Mentions) != 1 {
-			return error_response, nil
-		} else if strings.ToLower(words[2]) == "add" {
-			if !c.IsAdmin(m.Author.ID) {
-				return "You must be an admin to add admins.", nil
-			}
-			if len(c.Admins) == 0 || !c.IsAdmin(m.Mentions[0].ID) {
-				c.Admins = append(c.Admins, m.Mentions[0].ID)
-				return "Admin added!", nil
-			} else {
-				return "User is already an admin.", nil
-			}
-		} else if strings.ToLower(words[2]) == "remove" {
-			if !c.IsAdmin(m.Author.ID) {
-				return "You must be an admin to remove admins.", nil
-			}
-			if c.IsAdmin(m.Mentions[0].ID) {
-				for i, admin := range c.Admins {
-					if admin == m.Mentions[0].ID {
-						c.Admins = append(c.Admins[:i], c.Admins[i+1:]...)
-
-						return "Admin removed!", nil
-					}
-				}
-				return "User is not an admin.", nil
-			} else {
-				return "User is not an admin.", nil
-
-			}
-		} else {
-			return error_response, nil
-		}
-	} else {
-		return "Unknown setting.", nil
 	}
+
+	if !c.IsAdmin(i.Member.User.ID) {
+		return "You must be an admin to set system settings.", nil
+	}
+
+	var key, value string
+	for _, option := range o {
+
+		if option.Name == "key" && option.Type == discordgo.ApplicationCommandOptionString {
+			key = option.StringValue()
+		} else if option.Name == "value" && option.Type == discordgo.ApplicationCommandOptionString {
+			value = option.StringValue()
+		} else {
+			return "", errors.New("invalid option to set system")
+		}
+	}
+
+	switch key {
+	case "mode":
+		if value != "ladder" && value != "pyramid" && value != "open" {
+			return "Invalid ChallengeMode, must be ladder, pyramid, or open", nil
+		}
+		c.ChallengeMode = value
+		return "ChallengeMode set to " + value + "!", nil
+	case "timeoutdays":
+		timeout, err := strconv.Atoi(value)
+		if err != nil {
+			return "Invalid ChallengeTimeoutDays, must be an integer", nil
+		}
+		c.ChallengeTimeoutDays = time.Duration(timeout) * 24 * time.Hour
+		return "ChallengeTimeoutDays set to " + value + "!", nil
+	case "admin_add":
+		if !c.IsAdmin(value) {
+			c.Admins = append(c.Admins, value)
+			return value + " added to admins!", nil
+		} else {
+			return value + " is already an admin!", nil
+		}
+	case "admin_remove":
+		if c.IsAdmin(value) {
+			for i, admin := range c.Admins {
+				if admin == value {
+					c.Admins = append(c.Admins[:i], c.Admins[i+1:]...)
+					return value + " removed from admins!", nil
+				}
+			}
+		} else {
+			return value + " is not an admin!", nil
+		}
+	default:
+		return "Invalid key, must be mode, timeoutdays, admin_add, or admin_remove", nil
+	}
+
+	return "", errors.New("um, this shouldn't happen")
 }
 
-func handle_move(c *rankingdata.ChannelRankingData, m *discordgo.MessageCreate) (string, error) {
+func handleMove(c *rankingdata.ChannelRankingData,
+	i *discordgo.InteractionCreate,
+	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+
+	userID := i.Member.User.ID
+	position := -1
+
+	if !c.IsAdmin(userID) {
+		return "You must be an admin to move players.", nil
+	}
+
 	error_response := "Please specify a player and a position."
-	words := strings.Split(m.Content, " ")
-	if len(words) != 3 || len(m.Mentions) != 1 {
+	if len(o) != 2 {
 		return error_response, nil
 	}
-	position, err := strconv.Atoi(words[2])
+
+	for _, option := range o {
+		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
+			// this is optional, we user the user who sent the message if not specified
+			userID = option.UserValue(nil).ID
+		} else if option.Name == "position" && option.Type == discordgo.ApplicationCommandOptionInteger {
+			position = int(option.IntValue())
+		} else {
+			return error_response, nil
+		}
+	}
+
+	if position < 1 {
+		return "Position must be greater than 0.", nil
+	}
+
+	err := c.MovePlayer(userID, position)
 	if err != nil {
-		return error_response, nil
-	}
-	err2 := c.MovePlayer(m.Mentions[0].ID, position)
-	if err2 != nil {
-		return "", err2
+		return "", err
 	}
 	return "Player moved!", nil
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -34,12 +35,10 @@ type ChannelRankingData struct {
 }
 
 type Player struct {
-	PlayerID        string `bson:"player_id"`
-	Name            string `bson:"name,omitempty"`
-	Status          string `bson:"status,omitempty"`
-	Position        int    `bson:"position"`
-	TimeZone        string `bson:"time_zone,optional,omitempty"`
-	PrefferedServer string `bson:"preffered_server,omitempty"`
+	PlayerID string `bson:"player_id"`
+	Status   string `bson:"status,omitempty"`
+	Position int    `bson:"position"`
+	Notes    string `bson:"notes,omitempty"`
 }
 
 type Challenge struct {
@@ -55,6 +54,16 @@ type ResultHistory struct {
 	Result        string    `bson:"result"`
 	ChallengeDate time.Time `bson:"challenge_date,omitempty"`
 	ResolveDate   time.Time `bson:"resolve_date,omitempty"`
+}
+
+// Locks the ranking data for a channel
+func (c *ChannelRankingData) Lock() {
+	c.mutex.Lock()
+}
+
+// Unlocks the ranking data for a channel
+func (c *ChannelRankingData) Unlock() {
+	c.mutex.Unlock()
 }
 
 // function that reads a mongodb and returns a RankingData struct
@@ -354,7 +363,7 @@ func (rankingData *RankingData) FindChannel(channelID string) (*ChannelRankingDa
 }
 
 // function that adds a new player to the ranking data channel
-func (channel *ChannelRankingData) AddPlayer(playerID string, playerName string) error {
+func (channel *ChannelRankingData) AddPlayer(playerID string) error {
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 
@@ -367,7 +376,6 @@ func (channel *ChannelRankingData) AddPlayer(playerID string, playerName string)
 	channel.RankedPlayers = append(channel.RankedPlayers,
 		Player{
 			PlayerID: playerID,
-			Name:     playerName,
 			Status:   "active",
 			Position: len(channel.RankedPlayers) + 1,
 		})
@@ -490,15 +498,19 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 	return nil
 }
 
+// TODO, have cancel challenge function to omits the challenge from the history
+
 // function that resolves a challenge
-func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action string) error {
+func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action string) (string, error) {
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
+
+	var result string
 
 	// find the challenge
 	challenge, err := channel.findChallenge(reporterID)
 	if err != nil {
-		return errors.New("challenge not found")
+		return "", errors.New("challenge not found")
 	}
 
 	// sanity check the action
@@ -506,7 +518,7 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 	case "won", "lost", "cancel", "forfiet", "timed out":
 		// do nothing
 	default:
-		return errors.New("invalid action")
+		return "", errors.New("invalid action")
 	}
 
 	// if the reporter is the challengee, reverse the result/action
@@ -517,11 +529,11 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 		case "lost":
 			action = "won"
 		case "cancel":
-			return errors.New("challengee cannot cancel, only forfiet")
+			return "", errors.New("challengee cannot cancel, only forfiet")
 		}
 	} else if reporterID == challenge.ChallengerID {
 		if action == "forfiet" {
-			return errors.New("challenger cannot forfiet, only cancel")
+			return "", errors.New("challenger cannot forfiet, only cancel")
 		}
 	}
 
@@ -539,14 +551,19 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 	if action == "won" || action == "forfiet" || action == "timed out" {
 		challenger, err := channel.findPlayer(challenge.ChallengerID)
 		if err != nil {
-			return errors.New("challenger not found")
+			return "", errors.New("challenger not found")
 		}
 		challengee, err := channel.findPlayer(challenge.ChallengeeID)
 		if err != nil {
-			return errors.New("challengee not found")
+			return "", errors.New("challengee not found")
 		}
 		challenger.Position, challengee.Position = challengee.Position, challenger.Position
 		channel.fixPositions()
+		result = "Congratulations, <@" + challenge.ChallengerID +
+			"> has advanced from position " + strconv.Itoa(challengee.Position) +
+			" to position " + strconv.Itoa(challenger.Position) + "!"
+	} else {
+		result = "Sorry, <@" + challenge.ChallengerID + ">, better luck next time!"
 	}
 
 	// remove the challenge
@@ -558,5 +575,35 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 		}
 	}
 
+	return result, nil
+}
+
+// function that sets a player's availability
+func (channel *ChannelRankingData) SetPlayerStatus(playerID string, status string) error {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	// return an error if the player is not present
+	player, err := channel.findPlayer(playerID)
+	if err != nil {
+		return errors.New("player not found")
+	}
+
+	player.Status = status
+	return nil
+}
+
+// function that sets a player's notes
+func (channel *ChannelRankingData) SetPlayerNotes(playerID string, notes string) error {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	// return an error if the player is not present
+	player, err := channel.findPlayer(playerID)
+	if err != nil {
+		return errors.New("player not found")
+	}
+
+	player.Notes = notes
 	return nil
 }
