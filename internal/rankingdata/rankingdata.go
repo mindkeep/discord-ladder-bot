@@ -221,6 +221,56 @@ func (channel *ChannelRankingData) fixPositions() {
 // Public functions
 //
 
+// function that sets the game mode for a channel
+func (channel *ChannelRankingData) SetGameMode(gameMode string) {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	channel.ChallengeMode = gameMode
+}
+
+// function tht sets the timeout of matches for a channel
+func (channel *ChannelRankingData) SetTimeout(timeoutDays int) {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	channel.ChallengeTimeoutDays = time.Duration(timeoutDays) * 24 * time.Hour
+}
+
+// function that adds an admin to a channel
+func (channel *ChannelRankingData) AddAdmin(playerID string) error {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	// check if the player is already an admin
+	for _, admin := range channel.Admins {
+		if admin == playerID {
+			return errors.New("player is already an admin")
+		}
+	}
+
+	// add the player to the admin list
+	channel.Admins = append(channel.Admins, playerID)
+	return nil
+}
+
+// function that removes an admin from a channel
+func (channel *ChannelRankingData) RemoveAdmin(playerID string) error {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	// check if the player is an admin
+	for i, admin := range channel.Admins {
+		if admin == playerID {
+			// remove the player from the admin list
+			channel.Admins = append(channel.Admins[:i], channel.Admins[i+1:]...)
+			return nil
+		}
+	}
+
+	return errors.New("player is not an admin")
+}
+
 // function that prints a RankingData struct
 func (channel *ChannelRankingData) PrintRaw() (string, error) {
 	//lock the mutex

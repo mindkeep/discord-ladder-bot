@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -220,38 +219,32 @@ func handleSetSystem(c *rankingdata.ChannelRankingData,
 		if value != "ladder" && value != "pyramid" && value != "open" {
 			return "Invalid ChallengeMode, must be ladder, pyramid, or open", nil
 		}
-		c.ChallengeMode = value
+		c.SetGameMode(value)
 		return "ChallengeMode set to " + value + "!", nil
 	case "timeoutdays":
 		timeout, err := strconv.Atoi(value)
 		if err != nil {
 			return "Invalid ChallengeTimeoutDays, must be an integer", nil
 		}
-		c.ChallengeTimeoutDays = time.Duration(timeout) * 24 * time.Hour
+		c.SetTimeout(timeout)
 		return "ChallengeTimeoutDays set to " + value + "!", nil
 	case "admin_add":
-		if !c.IsAdmin(value) {
-			c.Admins = append(c.Admins, value)
-			return value + " added to admins!", nil
-		} else {
-			return value + " is already an admin!", nil
+		err := c.AddAdmin(value)
+		if err != nil {
+			return err.Error(), nil
 		}
+		return value + " added to admins!", nil
 	case "admin_remove":
-		if c.IsAdmin(value) {
-			for i, admin := range c.Admins {
-				if admin == value {
-					c.Admins = append(c.Admins[:i], c.Admins[i+1:]...)
-					return value + " removed from admins!", nil
-				}
-			}
-		} else {
-			return value + " is not an admin!", nil
+		err := c.RemoveAdmin(value)
+		if err != nil {
+			return err.Error(), nil
 		}
+		return value + " removed from admins!", nil
 	default:
 		return "Invalid key, must be mode, timeoutdays, admin_add, or admin_remove", nil
 	}
 
-	return "", errors.New("um, this shouldn't happen")
+	// we should never get here
 }
 
 func handleMove(c *rankingdata.ChannelRankingData,
