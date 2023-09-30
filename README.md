@@ -1,3 +1,6 @@
+# Deprecated implementation
+Golang is neat, but going to RIIR, Rewrite it in Rust
+
 # discord_ladder_bot
 Discord bot to track and manage a ladder tournament
 
