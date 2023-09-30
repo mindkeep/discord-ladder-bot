@@ -16,4 +16,4 @@
 
 # project config files
 config.yml*
-**/__debug_bin
+**/__debug_bin*
