@@ -256,7 +256,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			if c != nil {
 				return "Channel already initialized. If you'd like to reset, use !delete_tournament and then !init.", nil
 			} else {
-				err := bot.RankingData.AddChannel(i.ChannelID, i.User.ID)
+				err := bot.RankingData.AddChannel(i.ChannelID, i.Member.User.ID)
 				if err != nil {
 					return "", err
 				}
@@ -426,7 +426,7 @@ func (bot *DiscordBot) handleInteractionCreate(s *discordgo.Session, i *discordg
 	response, err2 := handler(channel, i, data.Options[0].Options)
 	if err2 != nil {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: err2.Error(),
 			},
