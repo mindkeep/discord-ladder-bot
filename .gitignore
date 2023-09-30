@@ -15,5 +15,5 @@
 # vendor/
 
 # project config files
-config.yml
-ranking.yml
+config.yml*
+**/__debug_bin
