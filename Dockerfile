@@ -1,14 +1,11 @@
 # Build stage
-FROM golang:1.20 AS build
+FROM rust:latest AS build
 
 WORKDIR /build
 
-COPY go.mod go.sum ./
-RUN go mod download
+COPY Cargo.toml Cargo.lock src ./
 
-COPY . .
-
-RUN CGO_ENABLED=0 go build -o app cmd/main/main.go
+RUN cargo build --release
 
 # Final stage
 FROM alpine:3.18
@@ -17,6 +14,6 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
 
-COPY --from=build /build/app .
+COPY --from=build /build/target/release/discord-ladder-bot .
 
-CMD ["./app"]
+CMD ["./discord-ladder-bot"]

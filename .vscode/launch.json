@@ -1,13 +1,45 @@
 {
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch Package",
-            "type": "go",
+            "type": "lldb",
             "request": "launch",
-            "mode": "auto",
-            "program": "cmd/main/main.go",
-            "cwd": "${workspaceFolder}",
+            "name": "Debug executable 'discord-ladder-bot'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=discord-ladder-bot",
+                    "--package=discord-ladder-bot"
+                ],
+                "filter": {
+                    "name": "discord-ladder-bot",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'discord-ladder-bot'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=discord-ladder-bot",
+                    "--package=discord-ladder-bot"
+                ],
+                "filter": {
+                    "name": "discord-ladder-bot",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
