@@ -15,5 +15,8 @@
 # vendor/
 
 # project config files
+.env
+app
 config.yml*
+deployment.yml*
 **/__debug_bin*
