@@ -5,6 +5,6 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 
 # Copy the Go binary from the local build context
-COPY app .
+COPY bin/discord-ladder-bot .
 
-CMD ["./app"]
+CMD ["./discord-ladder-bot"]

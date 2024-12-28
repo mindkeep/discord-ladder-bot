@@ -16,7 +16,7 @@
 
 # project config files
 .env
-app
+bin
 config.yml*
 deployment.yml*
 **/__debug_bin*

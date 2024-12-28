@@ -6,6 +6,7 @@ endif
 
 # Variables
 IMAGE_NAME := discord-ladder-bot
+BIN_NAME := discord-ladder-bot
 TAG := latest
 DOCKERFILE := Dockerfile
 CONFIG_FILE := config.yaml
@@ -13,18 +14,18 @@ CONFIG_FILE := config.yaml
 # Default action
 default: build push run
 
+bin:
+	mkdir bin
+
 # Build, vet, and test Go code
-go-build:
-	CGO_ENABLED=0 GOOS=linux go build -a -o app cmd/main/main.go
-
-go-vet:
+bin/$(BIN_NAME): bin
 	go vet ./...
-
-go-test:
 	go test ./...
+	CGO_ENABLED=0 GOOS=linux go build -a -o bin/$(BIN_NAME) cmd/main/main.go
+
 
 # Build the image using Buildah
-build: go-build go-vet go-test
+build: bin/$(BIN_NAME)
 	buildah bud -f $(DOCKERFILE) -t $(REGISTRY)/$(IMAGE_NAME):$(TAG) .
 
 # Run the container using Podman
@@ -36,11 +37,11 @@ push: build
 	podman push $(REGISTRY)/$(IMAGE_NAME):$(TAG)
 
 deploy: push
-	kubectl apply -f deployment.yaml
+	kubectl apply -f deployment.yml
 
 # Clean up local images and Go binaries
 clean:
 	podman rmi $(REGISTRY)/$(IMAGE_NAME):$(TAG)
-	rm -f app
+	rm -rf bin
 
-.PHONY: default build run push deploy clean go-build go-vet go-test
+.PHONY: default clean
