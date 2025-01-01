@@ -12,29 +12,32 @@ DOCKERFILE := Dockerfile
 CONFIG_FILE := config.yaml
 
 # Default action
-default: build push run
+default: test build
 
 bin:
 	mkdir bin
 
 # Build, vet, and test Go code
 bin/$(BIN_NAME): bin
-	go vet ./...
-	go test ./...
 	CGO_ENABLED=0 GOOS=linux go build -a -o bin/$(BIN_NAME) cmd/main/main.go
 
+# vet and test
+test:
+	go vet ./...
+	go test ./...
 
 # Build the image using Buildah
 build: bin/$(BIN_NAME)
 	buildah bud -f $(DOCKERFILE) -t $(REGISTRY)/$(IMAGE_NAME):$(TAG) .
 
-# Run the container using Podman
-run: build
-	podman run --rm -it --secret $(SECRET_ID),target=/app/config.yml $(REGISTRY)/$(IMAGE_NAME):$(TAG)
 
 # Push the image to a registry
 push: build
 	podman push $(REGISTRY)/$(IMAGE_NAME):$(TAG)
+
+# Run the container using Podman
+podman-run: push
+	podman run --rm -it --secret $(SECRET_ID),target=/app/config.yml $(REGISTRY)/$(IMAGE_NAME):$(TAG)
 
 deploy: push
 	kubectl apply -f deployment.yml
@@ -44,4 +47,4 @@ clean:
 	podman rmi $(REGISTRY)/$(IMAGE_NAME):$(TAG)
 	rm -rf bin
 
-.PHONY: default clean
+.PHONY: default test build podman-run push deploy clean
