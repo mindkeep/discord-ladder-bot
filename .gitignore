@@ -16,6 +16,7 @@
 
 # project config files
 .env
+.vscode
 bin
 config.yml*
 deployment.yml*
