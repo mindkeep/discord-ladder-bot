@@ -1,4 +1,5 @@
 # discord_ladder_bot
+
 Discord bot to track and manage a ladder tournament
 
 ## Implemented features
@@ -6,18 +7,18 @@ Discord bot to track and manage a ladder tournament
 - connection to discord and listening/responding to commands
 - writing and reading ranking data to MongoDB
 - commands
-    - help
-    - init
-    - delete_tournament
-    - register
-    - unregister
-    - challenge
-    - cancel
-    - forfeit
-    - result
-    - history
-    - ladder
-    - set
+  - help
+  - init
+  - delete_tournament
+  - register
+  - unregister
+  - challenge
+  - cancel
+  - forfeit
+  - result
+  - history
+  - ladder
+  - set
 - some unit testing for ranking data
 - admin id list to allow/disallow certain commands
 - implemented /ladder command!
@@ -26,7 +27,7 @@ Discord bot to track and manage a ladder tournament
 
 - fix bugs
 - move print functions into the discordbot handlers
-- add more unit tests (the neverending TODO)
+- add more unit tests (the never ending TODO)
 - cancel challenge should not be in the history
 
 ## Planned features
