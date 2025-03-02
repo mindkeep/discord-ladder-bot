@@ -53,20 +53,20 @@ func TestMaxPosInTier(t *testing.T) {
 		expected int
 	}{
 		{1, 1},
-		{2, 2},
-		{3, 4},
-		{4, 7},
-		{5, 11},
-		{6, 16},
-		{7, 22},
-		{8, 29},
-		{9, 37},
-		{10, 46},
-		{11, 56},
-		{12, 67},
-		{13, 79},
-		{14, 92},
-		{15, 106},
+		{2, 3},
+		{3, 6},
+		{4, 10},
+		{5, 15},
+		{6, 21},
+		{7, 28},
+		{8, 36},
+		{9, 45},
+		{10, 55},
+		{11, 66},
+		{12, 78},
+		{13, 91},
+		{14, 105},
+		{15, 120},
 	}
 	for test := range testCases {
 		assert.Equal(t, maxPosInTier(testCases[test].tier), testCases[test].expected)
@@ -147,7 +147,7 @@ func TestRemovePlayer(t *testing.T) {
 		assert.Equal(t, channel.RankedPlayers[i].Position, i+1)
 	}
 
-	// atempt to remove a player that doesn't exist
+	// attempt to remove a player that doesn't exist
 	if err := channel.RemovePlayer("1111"); err == nil {
 		t.Errorf("Error removing player: %s", err)
 	}

@@ -189,11 +189,11 @@ func tierFromPos(position int) int {
 
 // maxPosInTier returns the maximum position in a tier.
 func maxPosInTier(tier int) int {
-	t := 1
-	pos := 1
+	t := 0
+	pos := 0
 	for t < tier {
-		pos += t
 		t++
+		pos += t
 	}
 	return pos
 }
@@ -565,7 +565,7 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 
 	// sanity check the action
 	switch action {
-	case "won", "lost", "cancel", "forfiet", "timed out":
+	case "won", "lost", "cancel", "forfeit", "timed out":
 		// do nothing
 	default:
 		return "", errors.New("invalid action")
@@ -579,11 +579,11 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 		case "lost":
 			action = "won"
 		case "cancel":
-			return "", errors.New("challengee cannot cancel, only forfiet")
+			return "", errors.New("challengee cannot cancel, only forfeit")
 		}
 	} else if reporterID == challenge.ChallengerID {
-		if action == "forfiet" {
-			return "", errors.New("challenger cannot forfiet, only cancel")
+		if action == "forfeit" {
+			return "", errors.New("challenger cannot forfeit, only cancel")
 		}
 	}
 
@@ -598,7 +598,7 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 		})
 
 	// if the challenger won (or the match was conceded or timed out), update the ranking
-	if action == "won" || action == "forfiet" || action == "timed out" {
+	if action == "won" || action == "forfeit" || action == "timed out" {
 		challenger, err := channel.findPlayer(challenge.ChallengerID)
 		if err != nil {
 			return "", errors.New("challenger not found")
