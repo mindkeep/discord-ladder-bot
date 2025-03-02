@@ -10,6 +10,7 @@ BIN_NAME := discord-ladder-bot
 TAG := latest
 DOCKERFILE := Dockerfile
 CONFIG_FILE := config.yaml
+SOURCES := $(shell find . -name '*.go')
 
 # Default action
 default: test build
@@ -18,7 +19,7 @@ bin:
 	mkdir bin
 
 # Build, vet, and test Go code
-bin/$(BIN_NAME): bin
+bin/$(BIN_NAME): bin $(SOURCES)
 	CGO_ENABLED=0 GOOS=linux go build -a -o bin/$(BIN_NAME) cmd/main/main.go
 
 # vet and test
