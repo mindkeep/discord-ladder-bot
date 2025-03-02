@@ -3,6 +3,7 @@ package discordbot
 import (
 	"discord_ladder_bot/internal/config"
 	"discord_ladder_bot/internal/rankingdata"
+	"fmt"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -21,6 +22,7 @@ type DiscordBot struct {
 // NewDiscordBot creates a new DiscordBot instance
 func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 	discord, err := discordgo.New("Bot " + conf.DiscordToken)
+
 	if err != nil {
 		return nil, err
 	}
@@ -30,212 +32,187 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 	if err != nil {
 		return nil, err
 	}
-	bot := &DiscordBot{
-		Discord:     discord,
-		RankingData: rankingDataPtr,
-		commands: []*discordgo.ApplicationCommand{
-			{
-				Name:        "ladder",
-				Description: "Interface with the ranking bot.",
-				Options: []*discordgo.ApplicationCommandOption{
-					{
-						Name:        "help",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Help is on the way!",
-					},
-					{
-						Name:        "init",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Initialize a 1v1 ranking tournament.",
-					},
-					{
-						Name:        "delete_tournament",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Delete a 1v1 ranking tournament.",
-					},
-					{
-						Name:        "register",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Register a user to a 1v1 ranking tournament.",
-						Options: []*discordgo.ApplicationCommandOption{
-							{
-								Name:        "user",
-								Type:        discordgo.ApplicationCommandOptionUser,
-								Description: "The user to register.",
-								Required:    false,
-							},
+
+	commands := []*discordgo.ApplicationCommand{
+		{
+			Name:        "help",
+			Description: "Help is on the way!",
+		},
+		{
+			Name:        "init",
+			Description: "Initialize a 1v1 ranking tournament.",
+		},
+		{
+			Name:        "delete_tournament",
+			Description: "Delete a 1v1 ranking tournament.",
+		},
+		{
+			Name:        "register",
+			Description: "Register a user to a 1v1 ranking tournament.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "The user to register.",
+					Required:    false,
+				},
+			},
+		},
+		{
+			Name:        "unregister",
+			Description: "Unregister a user from a 1v1 ranking tournament.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "The user to unregister.",
+					Required:    false,
+				},
+			},
+		},
+		{
+			Name:        "challenge",
+			Description: "Challenge a user to a 1v1 match.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "The user to challenge.",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "result",
+			Description: "Report a result of a challenge",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "result",
+					Type:        discordgo.ApplicationCommandOptionString,
+					Description: "The result of the challenge.",
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{
+							Name:  "won",
+							Value: "won",
+						},
+						{
+							Name:  "lost",
+							Value: "lost",
 						},
 					},
-					{
-						Name:        "unregister",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Unregister a user from a 1v1 ranking tournament.",
-						Options: []*discordgo.ApplicationCommandOption{
-							{
-								Name:        "user",
-								Type:        discordgo.ApplicationCommandOptionUser,
-								Description: "The user to unregister.",
-								Required:    false,
-							},
+				},
+			},
+		},
+		{
+			Name:        "cancel",
+			Description: "Cancel a challenge.",
+		},
+		{
+			Name:        "forfeit",
+			Description: "Forfeit a challenge.",
+		},
+		{
+			Name:        "move",
+			Description: "Move a user to a different position in the ladder.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "The user to move.",
+					Required:    true,
+				},
+				{
+					Name:        "position",
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Description: "The position to move the user to.",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "standings",
+			Description: "Get the current standings.",
+		},
+		{
+			Name:        "history",
+			Description: "Get the recent history of matches.",
+		},
+		{
+			Name:        "printraw",
+			Description: "Print the raw data for the channel.",
+		},
+		{
+			Name:        "set",
+			Description: "Set a value in the ranking data.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "user",
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Description: "Set user data.",
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Name:        "user",
+							Type:        discordgo.ApplicationCommandOptionUser,
+							Description: "The user to set data for.",
+							Required:    false,
 						},
-					},
-					{
-						Name:        "challenge",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Challenge a user to a 1v1 match.",
-						Options: []*discordgo.ApplicationCommandOption{
-							{
-								Name:        "user",
-								Type:        discordgo.ApplicationCommandOptionUser,
-								Description: "The user to challenge.",
-								Required:    true,
-							},
-						},
-					},
-					{
-						Name:        "result",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Report a result of a challenge",
-						Options: []*discordgo.ApplicationCommandOption{
-							{
-								Name:        "result",
-								Type:        discordgo.ApplicationCommandOptionString,
-								Description: "The result of the challenge.",
-								Required:    true,
-								Choices: []*discordgo.ApplicationCommandOptionChoice{
-									{
-										Name:  "won",
-										Value: "won",
-									},
-									{
-										Name:  "lost",
-										Value: "lost",
-									},
+						{
+							Name:        "key",
+							Type:        discordgo.ApplicationCommandOptionString,
+							Description: "The key to set.",
+							Required:    false,
+							Choices: []*discordgo.ApplicationCommandOptionChoice{
+								{
+									Name:  "notes",
+									Value: "notes",
+								},
+								{
+									Name:  "status",
+									Value: "status",
 								},
 							},
 						},
-					},
-					{
-						Name:        "cancel",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Cancel a challenge.",
-					},
-					{
-						Name:        "forfeit",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Forfeit a challenge.",
-					},
-					{
-						Name:        "move",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Move a user to a different position in the ladder.",
-						Options: []*discordgo.ApplicationCommandOption{
-							{
-								Name:        "user",
-								Type:        discordgo.ApplicationCommandOptionUser,
-								Description: "The user to move.",
-								Required:    true,
-							},
-							{
-								Name:        "position",
-								Type:        discordgo.ApplicationCommandOptionInteger,
-								Description: "The position to move the user to.",
-								Required:    true,
-							},
+						{
+							Name:        "value",
+							Description: "The value to set.",
+							Required:    false,
 						},
 					},
-					{
-						Name:        "standings",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Get the current standings.",
-					},
-					{
-						Name:        "history",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Get the recent history of matches.",
-					},
-					{
-						Name:        "printraw",
-						Type:        discordgo.ApplicationCommandOptionSubCommand,
-						Description: "Print the raw data for the channel.",
-					},
-					{
-						Name:        "set",
-						Type:        discordgo.ApplicationCommandOptionSubCommandGroup,
-						Description: "Set a value in the ranking data.",
-						Options: []*discordgo.ApplicationCommandOption{
-							{
-								Name:        "user",
-								Type:        discordgo.ApplicationCommandOptionSubCommand,
-								Description: "Set user data.",
-								Options: []*discordgo.ApplicationCommandOption{
-									{
-										Name:        "user",
-										Type:        discordgo.ApplicationCommandOptionUser,
-										Description: "The user to set data for.",
-										Required:    false,
-									},
-									{
-										Name:        "key",
-										Type:        discordgo.ApplicationCommandOptionString,
-										Description: "The key to set.",
-										Required:    false,
-										Choices: []*discordgo.ApplicationCommandOptionChoice{
-											{
-												Name:  "notes",
-												Value: "notes",
-											},
-											{
-												Name:  "status",
-												Value: "status",
-											},
-										},
-									},
-									{
-										Name:        "value",
-										Type:        discordgo.ApplicationCommandOptionString,
-										Description: "The value to set.",
-										Required:    false,
-									},
+				},
+				{
+					Name:        "system",
+					Description: "Set system data.",
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Name:        "key",
+							Type:        discordgo.ApplicationCommandOptionString,
+							Description: "The key to set.",
+							Required:    false,
+							Choices: []*discordgo.ApplicationCommandOptionChoice{
+								{
+									Name:  "mode",
+									Value: "mode",
+								},
+								{
+									Name:  "timeout",
+									Value: "timeout",
+								},
+								{
+									Name:  "admin_add",
+									Value: "admin_add",
+								},
+								{
+									Name:  "admin_remove",
+									Value: "admin_remove",
 								},
 							},
-							{
-								Name:        "system",
-								Type:        discordgo.ApplicationCommandOptionSubCommand,
-								Description: "Set system data.",
-								Options: []*discordgo.ApplicationCommandOption{
-									{
-										Name:        "key",
-										Type:        discordgo.ApplicationCommandOptionString,
-										Description: "The key to set.",
-										Required:    false,
-										Choices: []*discordgo.ApplicationCommandOptionChoice{
-											{
-												Name:  "mode",
-												Value: "mode",
-											},
-											{
-												Name:  "timeout",
-												Value: "timeout",
-											},
-											{
-												Name:  "admin_add",
-												Value: "admin_add",
-											},
-											{
-												Name:  "admin_remove",
-												Value: "admin_remove",
-											},
-										},
-									},
-									{
-										Name:        "value",
-										Type:        discordgo.ApplicationCommandOptionString,
-										Description: "The value to set.",
-										Required:    false,
-									},
-								},
-							},
+						},
+						{
+							Name:        "value",
+							Type:        discordgo.ApplicationCommandOptionString,
+							Description: "The value to set.",
+							Required:    false,
 						},
 					},
 				},
@@ -243,7 +220,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		},
 	}
 
-	bot.handlers = map[string]commandHandler{
+	handlers := map[string]commandHandler{
 
 		"help": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
@@ -256,7 +233,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			if c != nil {
 				return "Channel already initialized. If you'd like to reset, use !delete_tournament and then !init.", nil
 			} else {
-				err := bot.RankingData.AddChannel(i.ChannelID, i.Member.User.ID)
+				err := rankingDataPtr.AddChannel(i.ChannelID, i.Member.User.ID)
 				if err != nil {
 					return "", err
 				}
@@ -266,7 +243,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		"delete_tournament": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
 			o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
-			err := bot.RankingData.RemoveChannel(i.ChannelID)
+			err := rankingDataPtr.RemoveChannel(i.ChannelID)
 			if err != nil {
 				return "", err
 			}
@@ -302,6 +279,13 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		},
 	}
 
+	bot := &DiscordBot{
+		Discord:     discord,
+		RankingData: rankingDataPtr,
+		commands:    commands,
+		handlers:    handlers,
+	}
+
 	return bot, nil
 }
 
@@ -318,9 +302,32 @@ func (bot *DiscordBot) Start() error {
 		return err
 	}
 
-	// Register commands
-	for _, command := range bot.commands {
-		bot.Discord.ApplicationCommandCreate(bot.Discord.State.User.ID, "", command)
+	oldguilds := bot.Discord.State.Guilds
+	for _, guild := range oldguilds {
+		fmt.Println("Found guild: ", guild.Name)
+		gcmds, err := bot.Discord.ApplicationCommands(bot.Discord.State.User.ID, guild.ID)
+		if err != nil {
+			for _, cmd := range gcmds {
+				fmt.Println("Deleting old command: ", cmd.Name, " in ", guild.Name)
+				bot.Discord.ApplicationCommandDelete(bot.Discord.State.User.ID, guild.ID, cmd.ID)
+			}
+		}
+	}
+
+	oldcmds, err := bot.Discord.ApplicationCommands(bot.Discord.State.User.ID, "")
+	if err != nil {
+		for _, cmd := range oldcmds {
+			fmt.Println("Deleting old command: ", cmd.Name)
+			bot.Discord.ApplicationCommandDelete(bot.Discord.State.User.ID, "", cmd.ID)
+		}
+	}
+
+	for _, cmd := range bot.commands {
+		fmt.Println("Creating command: ", cmd.Name)
+		_, err := bot.Discord.ApplicationCommandCreate(bot.Discord.State.User.ID, "", cmd)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -344,7 +351,7 @@ func (bot *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.Me
 
 	// If the message is addressed to the bot, then respond.
 	if len(m.Mentions) > 0 && m.Mentions[0].ID == s.State.User.ID {
-		_, _ = s.ChannelMessageSend(m.ChannelID, m.Author.Mention()+" I'm a bot! Try /ladder to do stuff.")
+		_, _ = s.ChannelMessageSend(m.ChannelID, m.Author.Mention()+" I'm a bot! Try /help to find other valid slash commands.")
 		return
 	}
 }
@@ -376,35 +383,15 @@ func (bot *DiscordBot) handleInteractionCreate(s *discordgo.Session, i *discordg
 	// get the command data
 	data := i.ApplicationCommandData()
 
-	if data.Name != "ladder" {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Unknown command: " + data.Name,
-			},
-		})
-		return
-	}
-
-	if len(data.Options) == 0 {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "No subcommand specified.",
-			},
-		})
-		return
-	}
-
 	// get the subcommand
-	subcommand := data.Options[0].Name
+	command := data.Name
 
-	handler, ok := bot.handlers[subcommand]
+	handler, ok := bot.handlers[command]
 	if !ok {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "Unknown subcommand: " + subcommand,
+				Content: "Unknown slash command: " + command,
 			},
 		})
 		return
@@ -412,7 +399,7 @@ func (bot *DiscordBot) handleInteractionCreate(s *discordgo.Session, i *discordg
 
 	// get the channel data
 	channel, err := bot.RankingData.FindChannel(i.ChannelID)
-	if err != nil && subcommand != "init" {
+	if err != nil && command != "init" {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -423,7 +410,7 @@ func (bot *DiscordBot) handleInteractionCreate(s *discordgo.Session, i *discordg
 	}
 
 	// call the handler
-	response, err2 := handler(channel, i, data.Options[0].Options)
+	response, err2 := handler(channel, i, data.Options)
 	if err2 != nil {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
