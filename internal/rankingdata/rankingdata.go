@@ -36,8 +36,9 @@ type ChannelRankingData struct {
 
 type Player struct {
 	PlayerID string `bson:"player_id"`
-	Status   string `bson:"status,omitempty"`
 	Position int    `bson:"position"`
+	Status   string `bson:"status,omitempty"`
+	GameName string `bson:"game_name,omitempty"`
 	Notes    string `bson:"notes,omitempty"`
 }
 
@@ -177,6 +178,7 @@ func (channel *ChannelRankingData) isPlayerAvailable(playerID string) bool {
 	return err != nil && player.Status == "active"
 }
 
+// function that returns the tier of a position
 func tierFromPos(position int) int {
 	tier := 1
 	tierdiv := 1
@@ -187,7 +189,7 @@ func tierFromPos(position int) int {
 	return tier
 }
 
-// maxPosInTier returns the maximum position in a tier.
+// function that returns the maximum position in a tier.
 func maxPosInTier(tier int) int {
 	t := 0
 	pos := 0
@@ -285,25 +287,57 @@ func (channel *ChannelRankingData) PrintRaw() (string, error) {
 }
 
 // function that returns a Discord formatted string of the ranking ladder
-func (channel *ChannelRankingData) PrintLadder() (string, error) {
-	//lock the mutex
+func (channel *ChannelRankingData) PrintRankings() (string, error) {
+	// lock the mutex
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
-
+	tier := 0
+	tierdiv := 1
 	var response string
+
+	// give a sane response if no one is registered
+	if len(channel.RankedPlayers) == 0 {
+		return "No players registered", nil
+	}
+
 	// walk through the players and build the string
 	for i, player := range channel.RankedPlayers {
+		// sanity check the position
+		if player.Position != i+1 {
+			return "", errors.New("internal player position is not correct")
+		}
+
+		pos := i + 1
+		// print tier headings
+		if channel.ChallengeMode == "pyramid" && pos == tierdiv {
+			tier++
+			response += fmt.Sprintf("## Tier %d:\n", tier)
+			tierdiv += tier
+		}
+
 		chal, err := channel.findChallenge(player.PlayerID)
 		if err != nil {
 			// player is not in a challenge
-			response += fmt.Sprintf("%d. <@%s>\n", i+1, player.PlayerID)
+			response += fmt.Sprintf("%d. %s/<@%s>\n", pos, player.GameName, player.PlayerID)
 		} else {
 			if chal.ChallengerID == player.PlayerID {
 				// player is the challenger
-				response += fmt.Sprintf("%d. <@%s> (vs <@%s>)\n", i+1, player.PlayerID, chal.ChallengeeID)
+				challengee, err := channel.findPlayer(chal.ChallengeeID)
+				if err != nil {
+					return "", errors.New("challengee not found")
+				}
+				response += fmt.Sprintf("%d. %s/<@%s> (challenging %s/<@%s>)\n", pos,
+					player.GameName, player.PlayerID,
+					challengee.GameName, chal.ChallengeeID)
 			} else {
 				// player is the challengee
-				response += fmt.Sprintf("%d. <@%s> (vs <@%s>)\n", i+1, player.PlayerID, chal.ChallengerID)
+				challenger, err := channel.findPlayer(chal.ChallengerID)
+				if err != nil {
+					return "", errors.New("challenger not found")
+				}
+				response += fmt.Sprintf("%d. %s/<@%s> (challenged by %s/<@%s>)\n", pos,
+					player.GameName, player.PlayerID,
+					challenger.GameName, chal.ChallengerID)
 			}
 		}
 	}
@@ -311,6 +345,7 @@ func (channel *ChannelRankingData) PrintLadder() (string, error) {
 	return response, nil
 }
 
+// function that verifies if a player is an admin
 func (channel *ChannelRankingData) IsAdmin(playerID string) bool {
 	//lock the mutex
 	channel.mutex.Lock()
@@ -339,13 +374,24 @@ func (channel *ChannelRankingData) PrintChallenges() (string, error) {
 	var response string
 	// walk through the challenges and build the string
 	for _, challenge := range channel.ActiveChallenges {
-		response += fmt.Sprintf("<@%s> vs <@%s>\n", challenge.ChallengerID, challenge.ChallengeeID)
+		challengee, err := channel.findPlayer(challenge.ChallengeeID)
+		if err != nil {
+			return "", errors.New("challengee not found")
+		}
+		challenger, err := channel.findPlayer(challenge.ChallengerID)
+		if err != nil {
+			return "", errors.New("challenger not found")
+		}
+		response += fmt.Sprintf("%s/<@%s>(#%d) vs %s/<@%s>(#%d)\n",
+			challenger.GameName, challenger.PlayerID, challenger.Position,
+			challengee.GameName, challengee.PlayerID, challengee.Position)
 	}
 
 	return response, nil
 }
 
 // function that returns a Discord formatted string of the result history
+// TODO add result limit
 func (channel *ChannelRankingData) PrintHistory() (string, error) {
 	//lock the mutex
 	channel.mutex.Lock()
@@ -354,7 +400,19 @@ func (channel *ChannelRankingData) PrintHistory() (string, error) {
 	var response string
 	// walk through the result history and build the string
 	for _, result := range channel.ResultHistory {
-		response += fmt.Sprintf("<@%s> %s vs <@%s>\n", result.ChallengerID, result.Result, result.ChallengeeID)
+		challengee, err := channel.findPlayer(result.ChallengeeID)
+		if err != nil {
+			return "", errors.New("challengee not found")
+		}
+		challenger, err := channel.findPlayer(result.ChallengerID)
+		if err != nil {
+			return "", errors.New("challenger not found")
+		}
+		// TODO add dates
+		response += fmt.Sprintf("%s/<@%s> vs %s/<@%s> (%s)\n",
+			challenger.GameName, challenger.PlayerID,
+			challengee.GameName, challengee.PlayerID,
+			result.Result)
 	}
 
 	return response, nil
@@ -413,7 +471,7 @@ func (rankingData *RankingData) FindChannel(channelID string) (*ChannelRankingDa
 }
 
 // function that adds a new player to the ranking data channel
-func (channel *ChannelRankingData) AddPlayer(playerID string) error {
+func (channel *ChannelRankingData) AddPlayer(playerID string, gameName string) error {
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 
@@ -426,8 +484,10 @@ func (channel *ChannelRankingData) AddPlayer(playerID string) error {
 	channel.RankedPlayers = append(channel.RankedPlayers,
 		Player{
 			PlayerID: playerID,
-			Status:   "active",
 			Position: len(channel.RankedPlayers) + 1,
+			GameName: gameName,
+			Status:   "active",
+			Notes:    "",
 		})
 	return nil
 }
@@ -518,9 +578,10 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 		return errors.New("challengee is not available")
 	}
 
-	// determine if the challenger is eligible to challenge challengee
-	challengerTier := tierFromPos(challenger.Position)
-	challengeeTier := tierFromPos(challengee.Position)
+	// if the challengee is a lower rank, it's invalid
+	if challenger.Position < challengee.Position {
+		return errors.New("challengee is a lower rank")
+	}
 
 	switch channel.ChallengeMode {
 	// in linear/ladder mode, the challenger can only challenge the next person up
@@ -530,9 +591,14 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 		}
 	// in pyramid mode, the challenger can only challenge someone in the same tier or the tier below
 	case "pyramid":
-		if challenger.Position > challengee.Position && challengerTier-1 <= challengeeTier {
-			return errors.New("challenger is not eligible to challenge challengee")
+		// determine if the challenger is eligible to challenge challengee
+		challengerTier := tierFromPos(challenger.Position)
+		challengeeTier := tierFromPos(challengee.Position)
+		if challengerTier-challengeeTier > 1 {
+			return errors.New("challenger must be within one tier of challengee")
 		}
+	case "open":
+		// in open mode, the challenger can challenge anyone
 	default:
 		return errors.New("invalid challenge mode")
 	}
@@ -548,7 +614,7 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 	return nil
 }
 
-// TODO, have cancel challenge function to omits the challenge from the history
+// TODO, have the cancel challenge function omit the challenge from the history
 
 // function that resolves a challenge
 func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action string) (string, error) {
@@ -610,8 +676,8 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 		challenger.Position, challengee.Position = challengee.Position, challenger.Position
 		channel.fixPositions()
 		result = "Congratulations, <@" + challenge.ChallengerID +
-			"> has advanced from position " + strconv.Itoa(challengee.Position) +
-			" to position " + strconv.Itoa(challenger.Position) + "!"
+			"> has advanced from position " + strconv.Itoa(challenger.Position) +
+			" to position " + strconv.Itoa(challengee.Position) + "!"
 	} else {
 		result = "Sorry, <@" + challenge.ChallengerID + ">, better luck next time!"
 	}
@@ -640,6 +706,21 @@ func (channel *ChannelRankingData) SetPlayerStatus(playerID string, status strin
 	}
 
 	player.Status = status
+	return nil
+}
+
+// function that sets a player's gamename
+func (channel *ChannelRankingData) SetPlayerGameName(playerID string, gameName string) error {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	// return an error if the player is not present
+	player, err := channel.findPlayer(playerID)
+	if err != nil {
+		return errors.New("player not found")
+	}
+
+	player.GameName = gameName
 	return nil
 }
 

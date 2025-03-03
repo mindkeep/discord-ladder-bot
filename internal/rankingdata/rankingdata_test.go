@@ -79,11 +79,11 @@ func TestAddPlayer(t *testing.T) {
 		Version: "v1_test",
 		Channels: []*ChannelRankingData{
 			{ChannelID: "1234", RankedPlayers: []Player{
-				{PlayerID: "1234", Status: "active", Position: 1},
-				{PlayerID: "5678", Status: "active", Position: 2},
-				{PlayerID: "9012", Status: "active", Position: 3},
-				{PlayerID: "3456", Status: "active", Position: 4},
-				{PlayerID: "7890", Status: "active", Position: 5},
+				{PlayerID: "1234", GameName: "u1234", Status: "active", Position: 1},
+				{PlayerID: "5678", GameName: "u5678", Status: "active", Position: 2},
+				{PlayerID: "9012", GameName: "u9012", Status: "active", Position: 3},
+				{PlayerID: "3456", GameName: "u3456", Status: "active", Position: 4},
+				{PlayerID: "7890", GameName: "u7890", Status: "active", Position: 5},
 			}}}}
 
 	channel, err := data.findChannel("1234")
@@ -92,7 +92,7 @@ func TestAddPlayer(t *testing.T) {
 		return
 	}
 
-	if err := channel.AddPlayer("1111"); err != nil {
+	if err := channel.AddPlayer("1111", "u1111"); err != nil {
 		t.Errorf("Error adding player: %s", err)
 	}
 
@@ -102,6 +102,7 @@ func TestAddPlayer(t *testing.T) {
 	} else {
 
 		assert.Equal(t, player.PlayerID, "1111")
+		assert.Equal(t, player.GameName, "u1111")
 		assert.Equal(t, player.Status, "active")
 		assert.Equal(t, player.Position, 6)
 
@@ -113,11 +114,11 @@ func TestRemovePlayer(t *testing.T) {
 		Version: "v1_test",
 		Channels: []*ChannelRankingData{
 			{ChannelID: "1234", RankedPlayers: []Player{
-				{PlayerID: "1234", Status: "active", Position: 1},
-				{PlayerID: "5678", Status: "active", Position: 2},
-				{PlayerID: "9012", Status: "active", Position: 3},
-				{PlayerID: "3456", Status: "active", Position: 4},
-				{PlayerID: "7890", Status: "active", Position: 5},
+				{PlayerID: "1234", GameName: "u1234", Status: "active", Position: 1},
+				{PlayerID: "5678", GameName: "u5678", Status: "active", Position: 2},
+				{PlayerID: "9012", GameName: "u9012", Status: "active", Position: 3},
+				{PlayerID: "3456", GameName: "u3456", Status: "active", Position: 4},
+				{PlayerID: "7890", GameName: "u7890", Status: "active", Position: 5},
 			}}}}
 
 	channel, err := data.findChannel("1234")

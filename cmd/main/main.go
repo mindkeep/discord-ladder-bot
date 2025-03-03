@@ -28,7 +28,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	discord.Start()
+	err2 := discord.Start()
+	if err2 != nil {
+		panic(err2)
+	}
+	fmt.Println("Discord bot started.")
 	defer discord.Stop()
 
 	// Gracefully Shutdown

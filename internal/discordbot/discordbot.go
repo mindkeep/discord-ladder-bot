@@ -40,11 +40,11 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		},
 		{
 			Name:        "init",
-			Description: "Initialize a 1v1 ranking tournament.",
+			Description: "Initialize a 1v1 ranking tournament (one per channel).",
 		},
 		{
 			Name:        "delete_tournament",
-			Description: "Delete a 1v1 ranking tournament.",
+			Description: "Delete a 1v1 ranking tournament (admin only).",
 		},
 		{
 			Name:        "register",
@@ -53,7 +53,13 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 				{
 					Name:        "user",
 					Type:        discordgo.ApplicationCommandOptionUser,
-					Description: "The user to register.",
+					Description: "The alternate discord user to register (admin only).",
+					Required:    false,
+				},
+				{
+					Name:        "gamename",
+					Type:        discordgo.ApplicationCommandOptionString,
+					Description: "In game name.",
 					Required:    false,
 				},
 			},
@@ -65,14 +71,14 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 				{
 					Name:        "user",
 					Type:        discordgo.ApplicationCommandOptionUser,
-					Description: "The user to unregister.",
+					Description: "The user to unregister (admin only).",
 					Required:    false,
 				},
 			},
 		},
 		{
 			Name:        "challenge",
-			Description: "Challenge a user to a 1v1 match.",
+			Description: "Challenge a user to a for their position.",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Name:        "user",
@@ -135,88 +141,98 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			Description: "Get the current standings.",
 		},
 		{
+			Name:        "active_challenges",
+			Description: "Get the current active challenges.",
+		},
+		{
 			Name:        "history",
 			Description: "Get the recent history of matches.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "limit",
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Description: "The number of matches to show (default: 10).",
+					Required:    false,
+				},
+			},
 		},
 		{
-			Name:        "printraw",
-			Description: "Print the raw data for the channel.",
-		},
-		{
-			Name:        "set",
+			Name:        "user_settings",
 			Description: "Set a value in the ranking data.",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Name:        "user",
-					Type:        discordgo.ApplicationCommandOptionSubCommand,
-					Description: "Set user data.",
-					Options: []*discordgo.ApplicationCommandOption{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "Set data for another user (admin only).",
+					Required:    false,
+				},
+				{
+					Name:        "key",
+					Type:        discordgo.ApplicationCommandOptionString,
+					Description: "The key to set.",
+					Required:    false,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
 						{
-							Name:        "user",
-							Type:        discordgo.ApplicationCommandOptionUser,
-							Description: "The user to set data for.",
-							Required:    false,
+							Name:  "notes",
+							Value: "notes",
 						},
 						{
-							Name:        "key",
-							Type:        discordgo.ApplicationCommandOptionString,
-							Description: "The key to set.",
-							Required:    false,
-							Choices: []*discordgo.ApplicationCommandOptionChoice{
-								{
-									Name:  "notes",
-									Value: "notes",
-								},
-								{
-									Name:  "status",
-									Value: "status",
-								},
-							},
+							Name:  "status",
+							Value: "status",
 						},
 						{
-							Name:        "value",
-							Description: "The value to set.",
-							Required:    false,
+							Name:  "gamename",
+							Value: "gamename",
 						},
 					},
 				},
 				{
-					Name:        "system",
-					Description: "Set system data.",
-					Options: []*discordgo.ApplicationCommandOption{
+					Name:        "value",
+					Type:        discordgo.ApplicationCommandOptionString,
+					Description: "The value to set.",
+					Required:    false,
+				},
+			},
+		},
+		{
+			Name:        "system_settings",
+			Description: "Set system data (admin only).",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "key",
+					Type:        discordgo.ApplicationCommandOptionString,
+					Description: "The key to set.",
+					Required:    false,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
 						{
-							Name:        "key",
-							Type:        discordgo.ApplicationCommandOptionString,
-							Description: "The key to set.",
-							Required:    false,
-							Choices: []*discordgo.ApplicationCommandOptionChoice{
-								{
-									Name:  "mode",
-									Value: "mode",
-								},
-								{
-									Name:  "timeout",
-									Value: "timeout",
-								},
-								{
-									Name:  "admin_add",
-									Value: "admin_add",
-								},
-								{
-									Name:  "admin_remove",
-									Value: "admin_remove",
-								},
-							},
+							Name:  "mode",
+							Value: "mode",
 						},
 						{
-							Name:        "value",
-							Type:        discordgo.ApplicationCommandOptionString,
-							Description: "The value to set.",
-							Required:    false,
+							Name:  "timeout",
+							Value: "timeout",
+						},
+						{
+							Name:  "admin_add",
+							Value: "admin_add",
+						},
+						{
+							Name:  "admin_remove",
+							Value: "admin_remove",
 						},
 					},
 				},
+				{
+					Name:        "value",
+					Type:        discordgo.ApplicationCommandOptionString,
+					Description: "The value to set.",
+					Required:    false,
+				},
 			},
+		},
+		{
+			Name:        "printraw",
+			Description: "Print the raw data for the channel.",
 		},
 	}
 
@@ -225,7 +241,12 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		"help": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
 			o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
-			return "if this works, maybe you don't really need help...", nil
+			var response string
+			response += "Commands:\n"
+			for _, cmd := range commands {
+				response += fmt.Sprintf("  /%s: %s\n", cmd.Name, cmd.Description)
+			}
+			return response, nil
 		},
 		"init": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
@@ -259,7 +280,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		"standings": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
 			o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
-			return c.PrintLadder()
+			return c.PrintRankings()
 		},
 		"active_challenges": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
@@ -269,9 +290,11 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		"history": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
 			o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+			// TODO handle limit
 			return c.PrintHistory()
 		},
-		"set": handleSet,
+		"user_settings":   handleUserSettings,
+		"system_settings": handleSystemSettings,
 		"printraw": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
 			o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
@@ -421,13 +444,25 @@ func (bot *DiscordBot) handleInteractionCreate(s *discordgo.Session, i *discordg
 		return
 	}
 
-	// respond
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: response,
-		},
-	})
+	// determine if we should limit mentions in noisy output commands
+	if command == "standings" || command == "active_challenges" || command == "history" {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: response,
+				AllowedMentions: &discordgo.MessageAllowedMentions{
+					Parse: []discordgo.AllowedMentionType{},
+				},
+			},
+		})
+	} else {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: response,
+			},
+		})
+	}
 
 	// save early and often?
 	bot.RankingData.Write()

@@ -15,24 +15,38 @@ func handleRegister(c *rankingdata.ChannelRankingData,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
 	playerID := i.Member.User.ID
+	gamename := i.Member.User.Username
 	for _, option := range o {
-		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
-			// this is optional, we user the user who sent the message if not specified
-			if !c.IsAdmin(i.Member.User.ID) {
-				return "You must be an admin to register other users.", nil
+		switch option.Name {
+		case "user":
+			if option.Type == discordgo.ApplicationCommandOptionUser {
+				// this is optional, we user the user who sent the message if not specified
+				if !c.IsAdmin(i.Member.User.ID) {
+					return "You must be an admin to register other users.", nil
+				}
+
+				playerID = option.UserValue(nil).ID
+				gamename = option.UserValue(nil).Username
+			} else {
+				return "", errors.New("internal error, unexpected option type, expected discord user")
 			}
 
-			playerID = option.UserValue(nil).ID
-		} else {
-			return "", nil
+		case "gamename":
+			if len(option.StringValue()) > 100 {
+				return "gamename must be less than 100 characters", nil
+			}
+			gamename = option.StringValue()
+		default:
+			return "", errors.New("invalid option to register user: " + option.Name)
 		}
 	}
 
-	err := c.AddPlayer(playerID)
+	err := c.AddPlayer(playerID, gamename)
 	if err != nil {
 		return "", err
 	}
-	return "Registered!", nil
+
+	return fmt.Sprintf("Registered <@%s>!", playerID), nil
 }
 
 func handleUnregister(c *rankingdata.ChannelRankingData,
@@ -72,7 +86,7 @@ func handleChallenge(c *rankingdata.ChannelRankingData,
 		return "", err
 	}
 
-	return "Challenge started!", nil
+	return fmt.Sprintf("<@%s> has challenged <@%s>!", i.Member.User.ID, playerID), nil
 }
 
 func handleResult(c *rankingdata.ChannelRankingData,
@@ -126,26 +140,7 @@ func handleForfeit(c *rankingdata.ChannelRankingData,
 	return response, nil
 }
 
-func handleSet(c *rankingdata.ChannelRankingData,
-	i *discordgo.InteractionCreate,
-	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
-
-	error_response := "Please specify user or system"
-
-	if len(o) != 1 || o[0].Type != discordgo.ApplicationCommandOptionSubCommand {
-		return error_response, nil
-	}
-	switch o[0].Name {
-	case "user":
-		return handleSetUser(c, i, o[0].Options)
-	case "system":
-		return handleSetSystem(c, i, o[0].Options)
-	default:
-		return error_response, nil
-	}
-}
-
-func handleSetUser(c *rankingdata.ChannelRankingData,
+func handleUserSettings(c *rankingdata.ChannelRankingData,
 	i *discordgo.InteractionCreate,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
@@ -173,10 +168,16 @@ func handleSetUser(c *rankingdata.ChannelRankingData,
 			return "Invalid status, must be active or inactive", nil
 		}
 		c.SetPlayerStatus(playerID, value)
-		return "Status set to " + value + "!", nil
+		return "status set to " + value + "!", nil
+	case "gamename":
+		if len(value) > 100 {
+			return "Game name must be less than 100 characters", nil
+		}
+		c.SetPlayerGameName(playerID, value)
+		return "gamename set to " + value + "!", nil
 	case "notes":
 		if len(value) > 100 {
-			return "Notes must be less than 100 characters", nil
+			return "notes must be less than 100 characters", nil
 		}
 		c.SetPlayerNotes(playerID, value)
 		return "Notes set to " + value + "!", nil
@@ -185,7 +186,7 @@ func handleSetUser(c *rankingdata.ChannelRankingData,
 	}
 }
 
-func handleSetSystem(c *rankingdata.ChannelRankingData,
+func handleSystemSettings(c *rankingdata.ChannelRankingData,
 	i *discordgo.InteractionCreate,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
