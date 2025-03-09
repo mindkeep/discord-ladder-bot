@@ -3,6 +3,7 @@ package discordbot
 import (
 	"discord_ladder_bot/internal/config"
 	"discord_ladder_bot/internal/rankingdata"
+	"discord_ladder_bot/internal/version"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
@@ -246,6 +247,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			for _, cmd := range commands {
 				response += fmt.Sprintf("  /%s: %s\n", cmd.Name, cmd.Description)
 			}
+			response += fmt.Sprintf("Version: %s\n", version.Version)
 			return response, nil
 		},
 		"init": func(c *rankingdata.ChannelRankingData,

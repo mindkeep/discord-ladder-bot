@@ -19,25 +19,23 @@ default: test build push
 bin:
 	mkdir -p bin
 
-# Build, vet, and test Go code
+# Build code with incremented version
 bin/$(BIN_NAME): bin $(SOURCES)
-	CGO_ENABLED=0 GOOS=linux go build -a -o bin/$(BIN_NAME) cmd/main/main.go
+	@VERSION=$$(cat $(VERSION_FILE)); \
+ 	NEW_VERSION=$$(echo $$VERSION | awk -F. '{print $$1"."$$2"."$$3+1}'); \
+	echo $$NEW_VERSION > $(VERSION_FILE)
+	CGO_ENABLED=0 GOOS=linux go build -a \
+		-ldflags "-X 'discord_ladder_bot/internal/version.Version=$$(cat $(VERSION_FILE))'" \
+		-o bin/$(BIN_NAME) cmd/main/main.go
 
 # vet and test
 test:
 	go vet ./...
 	go test ./...
 
-# Increment the build version
-increment-version:
-	@echo "Incrementing build version..."
-	@VERSION=$$(cat $(VERSION_FILE)); \
- 	NEW_VERSION=$$(echo $$VERSION | awk -F. '{print $$1"."$$2"."$$3+1}'); \
-	echo $$NEW_VERSION > $(VERSION_FILE); \
-	echo "New version: $$NEW_VERSION"
 
 # Build the image using Buildah
-build: bin/$(BIN_NAME) increment-version
+build: bin/$(BIN_NAME)
 	@VERSION=$$(cat $(VERSION_FILE)); \
 	buildah bud -f $(DOCKERFILE) -t $(REGISTRY)/$(IMAGE_NAME):$(TAG) -t $(REGISTRY)/$(IMAGE_NAME):$$VERSION .
 
@@ -51,11 +49,8 @@ push: build
 podman-run: push
 	podman run --rm -it --secret $(SECRET_ID),target=/app/config.yml $(REGISTRY)/$(IMAGE_NAME):$(TAG)
 
-# Clean up local images and Go binaries
+# Clean up binaries
 clean:
-	podman rmi $(REGISTRY)/$(IMAGE_NAME):$(TAG)
-	@VERSION=$$(cat $(VERSION_FILE)); \
-	podman rmi $(REGISTRY)/$(IMAGE_NAME):$$VERSION
-	rm -f bin/$(BIN_NAME)
+	rm -rf bin
 
-.PHONY: default build run push deploy clean go-build go-vet go-test increment-version
+.PHONY: default build run push deploy clean go-build go-vet go-test
