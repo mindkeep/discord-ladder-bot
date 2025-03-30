@@ -92,7 +92,7 @@ func TestAddPlayer(t *testing.T) {
 		return
 	}
 
-	if err := channel.AddPlayer("1111", "u1111"); err != nil {
+	if _, err := channel.AddPlayer("1111", "u1111"); err != nil {
 		t.Errorf("Error adding player: %s", err)
 	}
 
@@ -133,7 +133,7 @@ func TestRemovePlayer(t *testing.T) {
 	}
 	assert.Equal(t, len(channel.RankedPlayers), 5)
 
-	if err := channel.RemovePlayer("5678"); err != nil {
+	if _, err := channel.RemovePlayer("5678"); err != nil {
 		t.Errorf("Error removing player: %s", err)
 	}
 
@@ -149,8 +149,53 @@ func TestRemovePlayer(t *testing.T) {
 	}
 
 	// attempt to remove a player that doesn't exist
-	if err := channel.RemovePlayer("1111"); err == nil {
+	if _, err := channel.RemovePlayer("1111"); err == nil {
 		t.Errorf("Error removing player: %s", err)
 	}
 	assert.Equal(t, len(channel.RankedPlayers), 4)
+}
+
+func TestMovePlayer(t *testing.T) {
+	data := RankingData{
+		Version: "v1_test",
+		Channels: []*ChannelRankingData{
+			{ChannelID: "1234", RankedPlayers: []Player{
+				{PlayerID: "1234", GameName: "u1234", Status: "active", Position: 1},
+				{PlayerID: "5678", GameName: "u5678", Status: "active", Position: 2},
+				{PlayerID: "9012", GameName: "u9012", Status: "active", Position: 3},
+				{PlayerID: "3456", GameName: "u3456", Status: "active", Position: 4},
+				{PlayerID: "7890", GameName: "u7890", Status: "active", Position: 5},
+			}}}}
+
+	channel, err := data.findChannel("1234")
+	if err != nil {
+		t.Errorf("Error finding channel: %s", err)
+		return
+	}
+
+	// check that the player exists
+	if _, err := channel.findPlayer("5678"); err != nil {
+		t.Errorf("Error finding player: %s", err)
+	}
+
+	if _, err := channel.MovePlayer("5678", 3); err != nil {
+		t.Errorf("Error moving player: %s", err)
+	}
+
+	// check that the player was moved
+	if player, err := channel.findPlayer("5678"); err != nil {
+		t.Errorf("Error finding player: %s", err)
+	} else {
+		assert.Equal(t, player.Position, 3)
+	}
+
+	// check that the player positions were updated
+	for i := range channel.RankedPlayers {
+		assert.Equal(t, channel.RankedPlayers[i].Position, i+1)
+	}
+
+	// attempt to move a player that doesn't exist
+	if _, err := channel.MovePlayer("1111", 3); err == nil {
+		t.Errorf("Error moving player: %s", err)
+	}
 }

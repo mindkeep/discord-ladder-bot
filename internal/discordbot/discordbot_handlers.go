@@ -41,12 +41,7 @@ func handleRegister(c *rankingdata.ChannelRankingData,
 		}
 	}
 
-	err := c.AddPlayer(playerID, gamename)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("Registered <@%s>!", playerID), nil
+	return c.AddPlayer(playerID, gamename)
 }
 
 func handleUnregister(c *rankingdata.ChannelRankingData,
@@ -58,18 +53,14 @@ func handleUnregister(c *rankingdata.ChannelRankingData,
 		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
 			// this is optional, we user the user who sent the message if not specified
 			if !c.IsAdmin(i.Member.User.ID) {
-				return "You must be an admin to register other users.", nil
+				return "You must be an admin to unregister other users.", nil
 			}
 			playerID = option.UserValue(nil).ID
 		} else {
 			return "", nil
 		}
 	}
-	err := c.RemovePlayer(playerID)
-	if err != nil {
-		return "", err
-	}
-	return "Unregistered!", nil
+	return c.RemovePlayer(playerID)
 }
 
 func handleChallenge(c *rankingdata.ChannelRankingData,
@@ -81,12 +72,12 @@ func handleChallenge(c *rankingdata.ChannelRankingData,
 	}
 	playerID := o[0].UserValue(nil).ID
 
-	err := c.StartChallenge(i.Member.User.ID, playerID)
+	response, err := c.StartChallenge(i.Member.User.ID, playerID)
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("<@%s> has challenged <@%s>!", i.Member.User.ID, playerID), nil
+	return response, nil
 }
 
 func handleResult(c *rankingdata.ChannelRankingData,
@@ -279,9 +270,5 @@ func handleMove(c *rankingdata.ChannelRankingData,
 		return "Position must be greater than 0.", nil
 	}
 
-	err := c.MovePlayer(userID, position)
-	if err != nil {
-		return "", err
-	}
-	return "Player moved!", nil
+	return c.MovePlayer(userID, position)
 }

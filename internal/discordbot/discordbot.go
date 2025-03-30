@@ -91,12 +91,12 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		},
 		{
 			Name:        "result",
-			Description: "Report a result of a challenge",
+			Description: "Report a result of a challenge (only valid from the defender/challengee)",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Name:        "result",
 					Type:        discordgo.ApplicationCommandOptionString,
-					Description: "The result of the challenge.",
+					Description: "The result of the challenge (defender won or lost).",
 					Required:    true,
 					Choices: []*discordgo.ApplicationCommandOptionChoice{
 						{
@@ -117,11 +117,11 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		},
 		{
 			Name:        "forfeit",
-			Description: "Forfeit a challenge.",
+			Description: "Forfeit a challenge (alternate to \"/result result:lost\").",
 		},
 		{
 			Name:        "move",
-			Description: "Move a user to a different position in the ladder.",
+			Description: "Move a user to a different position in the ladder. (admin only)",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Name:        "user",
@@ -152,7 +152,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 				{
 					Name:        "limit",
 					Type:        discordgo.ApplicationCommandOptionInteger,
-					Description: "The number of matches to show (default: 10).",
+					Description: "The number of matches to show (default: 10, not implemented).",
 					Required:    false,
 				},
 			},
@@ -255,22 +255,13 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 			if c != nil {
 				return "Channel already initialized. If you'd like to reset, use !delete_tournament and then !init.", nil
-			} else {
-				err := rankingDataPtr.AddChannel(i.ChannelID, i.Member.User.ID)
-				if err != nil {
-					return "", err
-				}
 			}
-			return "Channel initialized!", nil
+			return rankingDataPtr.AddChannel(i.ChannelID, i.Member.User.ID)
 		},
 		"delete_tournament": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
 			o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
-			err := rankingDataPtr.RemoveChannel(i.ChannelID)
-			if err != nil {
-				return "", err
-			}
-			return "Channel deleted!", nil
+			return rankingDataPtr.RemoveChannel(i.ChannelID)
 		},
 		"register":   handleRegister,
 		"unregister": handleUnregister,
