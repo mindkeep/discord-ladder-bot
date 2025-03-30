@@ -556,6 +556,7 @@ func (channel *ChannelRankingData) MovePlayer(playerID string, newPosition int) 
 	if err != nil {
 		return "", errors.New("player not found")
 	}
+	gamename := movingPlayer.GameName
 
 	// return error if the player is in a challenge
 	if _, err := channel.findChallenge(playerID); err == nil {
@@ -578,8 +579,8 @@ func (channel *ChannelRankingData) MovePlayer(playerID string, newPosition int) 
 	channel.fixPositions()
 
 	return fmt.Sprintf("Moved %s/<@%s> to position %d",
-		movingPlayer.GameName,
-		movingPlayer.PlayerID,
+		gamename,
+		playerID,
 		newPosition), nil
 }
 
