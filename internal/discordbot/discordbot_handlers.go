@@ -4,7 +4,6 @@ import (
 	"discord_ladder_bot/internal/rankingdata"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -227,15 +226,25 @@ func handleSystemSettings(c *rankingdata.ChannelRankingData,
 			if err != nil {
 				return err.Error(), nil
 			}
+		case "notes":
+			err := c.SetNotes(option.StringValue())
+			if err != nil {
+				return err.Error(), nil
+			}
 		default:
 			return "", fmt.Errorf("invalid option to set system settings: %s", option.Name)
 		}
 	}
 	var response string
 	response += "Game settings:\n"
-	response += fmt.Sprintf("  gamemode: %s (ladder or pyramid or open)\n", c.ChallengeMode)
-	response += fmt.Sprintf("  timeout: %d\n", c.ChallengeTimeoutDays)
-	response += fmt.Sprintf("  admins: %s\n", strings.Join(c.Admins, ", "))
+	response += fmt.Sprintf("  gamemode: %s\n", c.ChallengeMode)
+	response += fmt.Sprintf("  timeout: %d (days)\n", c.ChallengeTimeoutDays)
+	response += "  admins: "
+	for _, admin := range c.Admins {
+		response += fmt.Sprintf("<@%s> ", admin)
+	}
+	response += "\n"
+	response += fmt.Sprintf("  notes: %s\n", c.Notes)
 	return response, nil
 }
 

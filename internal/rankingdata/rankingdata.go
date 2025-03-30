@@ -30,6 +30,7 @@ type ChannelRankingData struct {
 	ActiveChallenges     []Challenge     `bson:"active_challenges"`
 	ResultHistory        []ResultHistory `bson:"result_history"`
 	Admins               []string        `bson:"admins"`
+	Notes                string          `bson:"notes,omitempty"`
 	mutex                sync.Mutex
 }
 
@@ -296,6 +297,14 @@ func (channel *ChannelRankingData) RemoveAdmin(playerID string) error {
 	}
 
 	return errors.New("player is not an admin")
+}
+
+func (channel *ChannelRankingData) SetNotes(notes string) error {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	channel.Notes = notes
+	return nil
 }
 
 // function that prints a RankingData struct

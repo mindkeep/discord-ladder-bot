@@ -239,6 +239,12 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 					Description: "Remove an admin.",
 					Required:    false,
 				},
+				{
+					Name:        "notes",
+					Type:        discordgo.ApplicationCommandOptionString,
+					Description: "Notes to set.",
+					Required:    false,
+				},
 			},
 		},
 		{
