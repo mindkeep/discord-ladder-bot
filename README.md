@@ -25,17 +25,14 @@ Discord bot to track and manage a ladder tournament
 
 ## TODO
 
-- fix bugs
+- periodic checks for match/challenge timeout
+- periodic checks for players that have left the server
 - move print functions into the discordbot handlers
 - add more unit tests (the never ending TODO)
 - cancel challenge should not be in the history
 - fix mongoDB writes to be session based and per channel
 - user command to set game name
-
-## Planned features
-
-- periodic checks for match timeout
-- periodic checks for players that have left the server
+- fix bugs
 
 ## Other ideas
 
