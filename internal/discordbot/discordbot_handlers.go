@@ -4,7 +4,6 @@ import (
 	"discord_ladder_bot/internal/rankingdata"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -136,7 +135,9 @@ func handleUserSettings(c *rankingdata.ChannelRankingData,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
 	playerID := i.Member.User.ID
-	var key, value string
+
+	// if the user is an admin, they can set other users
+	// find user first so that other settings apply to the right user
 	for _, option := range o {
 		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
 			// this is optional, we user the user who sent the message if not specified
@@ -144,99 +145,98 @@ func handleUserSettings(c *rankingdata.ChannelRankingData,
 				return "You must be an admin to set other users.", nil
 			}
 			playerID = option.UserValue(nil).ID
-		} else if option.Name == "key" && option.Type == discordgo.ApplicationCommandOptionString {
-			key = option.StringValue()
-		} else if option.Name == "value" && option.Type == discordgo.ApplicationCommandOptionString {
-			value = option.StringValue()
-		} else {
-			return "", errors.New("invalid option to set user")
 		}
 	}
 
-	switch key {
-	case "status":
-		if value != "active" && value != "inactive" {
-			return "Invalid status, must be active or inactive", nil
+	// loop through other options
+	for _, option := range o {
+
+		switch option.Name {
+		case "user":
+			// already handled above
+		case "status":
+			err := c.SetPlayerStatus(playerID, option.StringValue())
+			if err != nil {
+				return "", err
+			}
+		case "gamename":
+			if len(option.StringValue()) > 100 {
+				return "Game name must be less than 100 characters", nil
+			}
+			err := c.SetPlayerGameName(playerID, option.StringValue())
+			if err != nil {
+				return "", err
+			}
+		case "notes":
+			if len(option.StringValue()) > 100 {
+				return "notes must be less than 100 characters", nil
+			}
+			err := c.SetPlayerNotes(playerID, option.StringValue())
+			if err != nil {
+				return "", err
+			}
+		default:
+			return "", fmt.Errorf("invalid option to set user settings: %s", option.Name)
 		}
-		c.SetPlayerStatus(playerID, value)
-		return "status set to " + value + "!", nil
-	case "gamename":
-		if len(value) > 100 {
-			return "Game name must be less than 100 characters", nil
-		}
-		c.SetPlayerGameName(playerID, value)
-		return "gamename set to " + value + "!", nil
-	case "notes":
-		if len(value) > 100 {
-			return "notes must be less than 100 characters", nil
-		}
-		c.SetPlayerNotes(playerID, value)
-		return "Notes set to " + value + "!", nil
-	default:
-		return "Invalid key, must be status or notes", nil
 	}
+
+	// get the updated settings
+	player, err := c.FindPlayer(playerID)
+	if err != nil {
+		return "", err
+	}
+
+	// return the updated settings
+	var response string
+	response += fmt.Sprintf("User settings updated for <@%s>:\n", playerID)
+	response += fmt.Sprintf("  gamename: %s\n", player.GameName)
+	response += fmt.Sprintf("  status: %s\n", player.Status)
+	response += fmt.Sprintf("  notes: %s\n", player.Notes)
+	return response, nil
 }
 
 func handleSystemSettings(c *rankingdata.ChannelRankingData,
 	i *discordgo.InteractionCreate,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
-	if len(o) == 0 {
-		var response string
-		response += "Game settings:\n"
-		response += fmt.Sprintf("  ChallengeMode: %s (ladder or pyramid or open)\n", c.ChallengeMode)
-		response += fmt.Sprintf("  ChallengeTimeoutDays: %d\n", c.ChallengeTimeoutDays)
-		response += fmt.Sprintf("  Admins: %s\n", strings.Join(c.Admins, ", "))
-		return response, nil
-	}
-
 	if !c.IsAdmin(i.Member.User.ID) {
 		return "You must be an admin to set system settings.", nil
 	}
 
-	var key, value string
+	// loop through options
+	// we don't need to check for user, since only admins can set system settings
 	for _, option := range o {
-
-		if option.Name == "key" && option.Type == discordgo.ApplicationCommandOptionString {
-			key = option.StringValue()
-		} else if option.Name == "value" && option.Type == discordgo.ApplicationCommandOptionString {
-			value = option.StringValue()
-		} else {
-			return "", errors.New("invalid option to set system")
+		switch option.Name {
+		case "mode":
+			err := c.SetGameMode(option.StringValue())
+			if err != nil {
+				return "", err
+			}
+		case "timeoutdays":
+			err := c.SetTimeout(int(option.IntValue()))
+			if err != nil {
+				return "", err
+			}
+		case "admin_add":
+			err := c.AddAdmin(option.UserValue(nil).ID)
+			if err != nil {
+				return err.Error(), nil
+			}
+		case "admin_remove":
+			err := c.RemoveAdmin(option.UserValue(nil).ID)
+			if err != nil {
+				return err.Error(), nil
+			}
+		default:
+			return "", fmt.Errorf("invalid option to set system settings: %s", option.Name)
 		}
 	}
-
-	switch key {
-	case "mode":
-		if value != "ladder" && value != "pyramid" && value != "open" {
-			return "Invalid ChallengeMode, must be ladder, pyramid, or open", nil
-		}
-		c.SetGameMode(value)
-		return "ChallengeMode set to " + value + "!", nil
-	case "timeoutdays":
-		timeout, err := strconv.Atoi(value)
-		if err != nil {
-			return "Invalid ChallengeTimeoutDays, must be an integer", nil
-		}
-		c.SetTimeout(timeout)
-		return "ChallengeTimeoutDays set to " + value + "!", nil
-	case "admin_add":
-		err := c.AddAdmin(value)
-		if err != nil {
-			return err.Error(), nil
-		}
-		return value + " added to admins!", nil
-	case "admin_remove":
-		err := c.RemoveAdmin(value)
-		if err != nil {
-			return err.Error(), nil
-		}
-		return value + " removed from admins!", nil
-	default:
-		return "Invalid key, must be mode, timeoutdays, admin_add, or admin_remove", nil
-	}
-
-	// we should never get here
+	var response string
+	response += "Game settings:\n"
+	response += fmt.Sprintf("  gamemode: %s (ladder or pyramid or open)\n", c.ChallengeMode)
+	response += fmt.Sprintf("  timeout: %d\n", c.ChallengeTimeoutDays)
+	response += fmt.Sprintf("  admins: %s\n", strings.Join(c.Admins, ", "))
+	return response, nil
 }
 
 func handleMove(c *rankingdata.ChannelRankingData,

@@ -222,20 +222,41 @@ func (channel *ChannelRankingData) fixPositions() {
 // Public functions
 //
 
+func (channel *ChannelRankingData) FindPlayer(playerID string) (Player, error) {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	player, err := channel.findPlayer(playerID)
+
+	// return a copy of the player struct
+	return *player, err
+}
+
 // function that sets the game mode for a channel
-func (channel *ChannelRankingData) SetGameMode(gameMode string) {
+func (channel *ChannelRankingData) SetGameMode(gameMode string) error {
+
+	//verify the game mode is valid
+	if gameMode != "ladder" && gameMode != "pyramid" && gameMode != "linear" && gameMode != "open" {
+		return errors.New("invalid game mode")
+	}
+
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 
 	channel.ChallengeMode = gameMode
+	return nil
 }
 
 // function tht sets the timeout of matches for a channel
-func (channel *ChannelRankingData) SetTimeout(timeoutDays int) {
+func (channel *ChannelRankingData) SetTimeout(timeoutDays int) error {
+	if timeoutDays < 1 || timeoutDays > 30 {
+		return errors.New("timeout days must be between 1 and 30")
+	}
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 
 	channel.ChallengeTimeoutDays = time.Duration(timeoutDays) * 24 * time.Hour
+	return nil
 }
 
 // function that adds an admin to a channel
