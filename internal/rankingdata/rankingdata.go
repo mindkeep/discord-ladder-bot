@@ -700,18 +700,10 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 		return "", errors.New("invalid action")
 	}
 
-	// TODO this whole block is awkward since we're making challengee responsible
-	// for reporting, just to flip the logic here.
-	//
 	// if the reporter is the challengee, reverse the result/action
 	if reporterID == challenge.ChallengeeID {
-		switch action {
-		case "won":
-			action = "lost"
-		case "lost":
-			action = "won"
-		case "cancel":
-			return "", errors.New("challengee cannot cancel, only forfeit")
+		if action == "cancel" {
+			return "", errors.New("challengee cannot cancel, only forfeit or report results")
 		}
 	} else if reporterID == challenge.ChallengerID {
 		if action != "cancel" {
@@ -744,17 +736,17 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 	}
 
 	// if the challenger won (or the match was conceded or timed out), update the ranking
-	if action == "won" || action == "forfeit" || action == "timed out" {
-		challenger.Position, challengee.Position = challengee.Position, challenger.Position
-		channel.fixPositions()
+	if action == "lost" || action == "forfeit" || action == "timed out" {
 		result = fmt.Sprintf("Congratulations, %s/<@%s> has advanced from position %d to position %d!",
 			challenger.GameName, challenger.PlayerID,
 			challenger.Position, challengee.Position)
-	} else if action == "lost" {
+		challenger.Position, challengee.Position = challengee.Position, challenger.Position
+		channel.fixPositions()
+	} else if action == "won" {
 		result = fmt.Sprintf("Sorry, %s/<@%s>, better luck next time! %s/<@%s> holds position %d!",
-			challengee.GameName, challengee.PlayerID,
 			challenger.GameName, challenger.PlayerID,
-			challenger.Position)
+			challengee.GameName, challengee.PlayerID,
+			challengee.Position)
 	} else if action == "cancel" {
 		result = fmt.Sprintf("%s/<@%s> canceled challenge to %s/<@%s>",
 			challenger.GameName, challenger.PlayerID,
