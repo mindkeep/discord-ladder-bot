@@ -91,7 +91,7 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		},
 		{
 			Name:        "result",
-			Description: "Report a result of a challenge (only valid from the defender/challengee)",
+			Description: "Report a result of a challenge (only valid from the defender)",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Name:        "result",
@@ -423,9 +423,15 @@ func (bot *DiscordBot) handleInteractionCreate(s *discordgo.Session, i *discordg
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "Unknown slash command: " + command,
+				Content: "Invalid slash command: " + command,
 			},
 		})
+		err := bot.Discord.ApplicationCommandDelete(bot.Discord.State.User.ID, "", data.ID)
+		if err != nil {
+			fmt.Println("Error deleting invalid command: ", err)
+		} else {
+			fmt.Println("Deleted invalid command: ", command)
+		}
 		return
 	}
 
@@ -475,5 +481,4 @@ func (bot *DiscordBot) handleInteractionCreate(s *discordgo.Session, i *discordg
 
 	// save early and often?
 	bot.RankingData.Write()
-
 }

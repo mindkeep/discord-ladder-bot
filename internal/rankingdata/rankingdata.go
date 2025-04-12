@@ -358,13 +358,13 @@ func (channel *ChannelRankingData) PrintRankings() (string, error) {
 				// player is the challenger
 				challengee, err := channel.findPlayer(chal.ChallengeeID)
 				if err != nil {
-					return "", errors.New("challengee not found")
+					return "", errors.New("defender not found")
 				}
 				response += fmt.Sprintf("%d. %s/<@%s> (challenging %s/<@%s>)\n", pos,
 					player.GameName, player.PlayerID,
 					challengee.GameName, chal.ChallengeeID)
 			} else {
-				// player is the challengee
+				// player is the defender
 				challenger, err := channel.findPlayer(chal.ChallengerID)
 				if err != nil {
 					return "", errors.New("challenger not found")
@@ -414,7 +414,7 @@ func (channel *ChannelRankingData) PrintChallenges() (string, error) {
 	for _, challenge := range channel.ActiveChallenges {
 		challengee, err := channel.findPlayer(challenge.ChallengeeID)
 		if err != nil {
-			return "", errors.New("challengee not found")
+			return "", errors.New("defender not found")
 		}
 		challenger, err := channel.findPlayer(challenge.ChallengerID)
 		if err != nil {
@@ -440,7 +440,7 @@ func (channel *ChannelRankingData) PrintHistory() (string, error) {
 	for _, result := range channel.ResultHistory {
 		challengee, err := channel.findPlayer(result.ChallengeeID)
 		if err != nil {
-			return "", errors.New("challengee not found")
+			return "", errors.New("defender not found")
 		}
 		challenger, err := channel.findPlayer(result.ChallengerID)
 		if err != nil {
@@ -630,7 +630,7 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 	}
 	challengee, err := channel.findPlayer(challengeeID)
 	if err != nil {
-		return "", errors.New("challengee not found")
+		return "", errors.New("defender not found")
 	}
 
 	// if the challenger is not available, return an error
@@ -639,12 +639,12 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 		return "", errors.New("challenger is not available")
 	}
 	if !channel.isPlayerAvailable(challengeeID) {
-		return "", errors.New("challengee is not available")
+		return "", errors.New("defender is not available")
 	}
 
 	// if the challengee is a lower rank, it's invalid
 	if challenger.Position < challengee.Position {
-		return "", errors.New("challengee is a lower rank")
+		return "", errors.New("defender is a lower rank")
 	}
 
 	switch channel.ChallengeMode {
@@ -659,7 +659,7 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 		challengerTier := tierFromPos(challenger.Position)
 		challengeeTier := tierFromPos(challengee.Position)
 		if challengerTier-challengeeTier > 1 {
-			return "", errors.New("challenger must be within one tier of challengee")
+			return "", errors.New("challenger must be within one tier of defender")
 		}
 	case "open":
 		// in open mode, the challenger can challenge anyone
@@ -707,7 +707,7 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 	// if the reporter is the challengee, reverse the result/action
 	if reporterID == challenge.ChallengeeID {
 		if action == "cancel" {
-			return "", errors.New("challengee cannot cancel, only forfeit or report results")
+			return "", errors.New("defender cannot cancel, only forfeit or report results")
 		}
 	} else if reporterID == challenge.ChallengerID {
 		if action != "cancel" {
@@ -736,7 +736,7 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 	}
 	challengee, err := channel.findPlayer(challenge.ChallengeeID)
 	if err != nil {
-		return "", errors.New("challengee not found")
+		return "", errors.New("defender not found")
 	}
 
 	// if the challenger won (or the match was conceded or timed out), update the ranking
