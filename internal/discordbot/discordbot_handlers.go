@@ -13,30 +13,28 @@ func handleRegister(c *rankingdata.ChannelRankingData,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
 	playerID := i.Member.User.ID
-	gamename := i.Member.User.Username
+	gamename := ""
 	for _, option := range o {
 		switch option.Name {
-		case "user":
+		case "alt_user":
 			if option.Type == discordgo.ApplicationCommandOptionUser {
 				// this is optional, we user the user who sent the message if not specified
 				if !c.IsAdmin(i.Member.User.ID) {
 					return "You must be an admin to register other users.", nil
 				}
-
 				playerID = option.UserValue(nil).ID
-				gamename = option.UserValue(nil).Username
 			} else {
 				return "", errors.New("internal error, unexpected option type, expected discord user")
 			}
 
 		case "gamename":
-			if len(option.StringValue()) > 100 {
-				return "gamename must be less than 100 characters", nil
-			}
 			gamename = option.StringValue()
 		default:
 			return "", errors.New("invalid option to register user: " + option.Name)
 		}
+	}
+	if gamename == "" {
+		gamename = "Unknown"
 	}
 
 	return c.AddPlayer(playerID, gamename)
@@ -48,14 +46,17 @@ func handleUnregister(c *rankingdata.ChannelRankingData,
 
 	playerID := i.Member.User.ID
 	for _, option := range o {
-		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
-			// this is optional, we user the user who sent the message if not specified
+		switch option.Name {
+		case "alt_user":
+			if option.Type != discordgo.ApplicationCommandOptionUser {
+				return "", errors.New("internal error, unexpected option type, expected discord user")
+			}
 			if !c.IsAdmin(i.Member.User.ID) {
 				return "You must be an admin to unregister other users.", nil
 			}
 			playerID = option.UserValue(nil).ID
-		} else {
-			return "", nil
+		default:
+			return "", errors.New("invalid option to unregister user: " + option.Name)
 		}
 	}
 	return c.RemovePlayer(playerID)
@@ -65,68 +66,104 @@ func handleChallenge(c *rankingdata.ChannelRankingData,
 	i *discordgo.InteractionCreate,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
-	if len(o) != 1 || o[0].Type != discordgo.ApplicationCommandOptionUser {
-		return "Please specify a player to challenge", nil
+	challengerID := i.Member.User.ID
+	defenderID := ""
+	for _, option := range o {
+		switch option.Name {
+		case "alt_user":
+			if option.Type != discordgo.ApplicationCommandOptionUser {
+				return "", errors.New("internal error, unexpected option type, expected discord user")
+			}
+			if !c.IsAdmin(i.Member.User.ID) {
+				return "You must be an admin to unregister other users.", nil
+			}
+			challengerID = option.UserValue(nil).ID
+		case "defender":
+			if option.Type != discordgo.ApplicationCommandOptionUser {
+				return "", errors.New("internal error, unexpected option type, expected discord user")
+			}
+			defenderID = option.UserValue(nil).ID
+		default:
+			return "", errors.New("invalid option to challenge user: " + option.Name)
+		}
 	}
-	playerID := o[0].UserValue(nil).ID
-
-	response, err := c.StartChallenge(i.Member.User.ID, playerID)
-	if err != nil {
-		return "", err
+	if defenderID == "" {
+		return "Please specify a defender to challenge.", nil
 	}
 
-	return response, nil
+	return c.StartChallenge(challengerID, defenderID)
 }
 
 func handleResult(c *rankingdata.ChannelRankingData,
 	i *discordgo.InteractionCreate,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
-	if len(o) != 1 || o[0].Type != discordgo.ApplicationCommandOptionString {
-		return "Please specify a result (w, won, l, lost)", nil
+	result := ""
+	playerID := i.Member.User.ID
+	for _, option := range o {
+		switch option.Name {
+		case "alt_user":
+			if option.Type != discordgo.ApplicationCommandOptionUser {
+				return "", errors.New("internal error, unexpected option type, expected discord user")
+			}
+			if !c.IsAdmin(i.Member.User.ID) {
+				return "You must be an admin to set results for other users.", nil
+			}
+			playerID = option.UserValue(nil).ID
+		case "result":
+			result = option.StringValue()
+			if result != "won" && result != "lost" {
+				return "Please specify a valid result (won, lost)", nil
+			}
+		default:
+			return "", errors.New("invalid option to set challenge result: " + option.Name)
+		}
 	}
-	result := o[0].StringValue()
 
-	// we tried to be specific in the command, but people will still mess it up
-	switch result {
-	case "w":
-		result = "won"
-	case "win":
-		result = "won"
-	case "l":
-		result = "lost"
-	case "loss":
-		result = "lost"
-	case "lose":
-		result = "lost"
-	}
-	response, err := c.ResolveChallenge(i.Member.User.ID, result)
-	if err != nil {
-		return "", err
-	}
-	return response, nil
+	return c.ResolveChallenge(playerID, result)
 }
 
 func handleCancel(c *rankingdata.ChannelRankingData,
 	i *discordgo.InteractionCreate,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
-	response, err := c.ResolveChallenge(i.Member.User.ID, "cancel")
-	if err != nil {
-		return "", err
+	playerID := i.Member.User.ID
+	for _, option := range o {
+		switch option.Name {
+		case "alt_user":
+			if option.Type != discordgo.ApplicationCommandOptionUser {
+				return "", errors.New("internal error, unexpected option type, expected discord user")
+			}
+			if !c.IsAdmin(i.Member.User.ID) {
+				return "You must be an admin to cancel challenges for other users.", nil
+			}
+			playerID = option.UserValue(nil).ID
+		default:
+			return "", errors.New("invalid option to cancel challenge: " + option.Name)
+		}
 	}
-	return response, nil
+	return c.ResolveChallenge(playerID, "cancel")
 }
 
 func handleForfeit(c *rankingdata.ChannelRankingData,
 	i *discordgo.InteractionCreate,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
-
-	response, err := c.ResolveChallenge(i.Member.User.ID, "forfeit")
-	if err != nil {
-		return "", err
+	playerID := i.Member.User.ID
+	for _, option := range o {
+		switch option.Name {
+		case "alt_user":
+			if option.Type != discordgo.ApplicationCommandOptionUser {
+				return "", errors.New("internal error, unexpected option type, expected discord user")
+			}
+			if !c.IsAdmin(i.Member.User.ID) {
+				return "You must be an admin to forfeit challenges for other users.", nil
+			}
+			playerID = option.UserValue(nil).ID
+		default:
+			return "", errors.New("invalid option to forfeit challenge: " + option.Name)
+		}
 	}
-	return response, nil
+	return c.ResolveChallenge(playerID, "forfeit")
 }
 
 func handleUserSettings(c *rankingdata.ChannelRankingData,
@@ -138,7 +175,7 @@ func handleUserSettings(c *rankingdata.ChannelRankingData,
 	// if the user is an admin, they can set other users
 	// find user first so that other settings apply to the right user
 	for _, option := range o {
-		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
+		if option.Name == "alt_user" && option.Type == discordgo.ApplicationCommandOptionUser {
 			// this is optional, we user the user who sent the message if not specified
 			if !c.IsAdmin(i.Member.User.ID) {
 				return "You must be an admin to set other users.", nil
@@ -151,7 +188,7 @@ func handleUserSettings(c *rankingdata.ChannelRankingData,
 	for _, option := range o {
 
 		switch option.Name {
-		case "user":
+		case "alt_user":
 			// already handled above
 		case "status":
 			err := c.SetPlayerStatus(playerID, option.StringValue())
@@ -159,17 +196,11 @@ func handleUserSettings(c *rankingdata.ChannelRankingData,
 				return "", err
 			}
 		case "gamename":
-			if len(option.StringValue()) > 100 {
-				return "Game name must be less than 100 characters", nil
-			}
 			err := c.SetPlayerGameName(playerID, option.StringValue())
 			if err != nil {
 				return "", err
 			}
 		case "notes":
-			if len(option.StringValue()) > 100 {
-				return "notes must be less than 100 characters", nil
-			}
 			err := c.SetPlayerNotes(playerID, option.StringValue())
 			if err != nil {
 				return "", err
@@ -252,10 +283,10 @@ func handleMove(c *rankingdata.ChannelRankingData,
 	i *discordgo.InteractionCreate,
 	o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 
-	userID := i.Member.User.ID
+	playerID := ""
 	position := -1
 
-	if !c.IsAdmin(userID) {
+	if !c.IsAdmin(i.Member.User.ID) {
 		return "You must be an admin to move players.", nil
 	}
 
@@ -265,19 +296,28 @@ func handleMove(c *rankingdata.ChannelRankingData,
 	}
 
 	for _, option := range o {
-		if option.Name == "user" && option.Type == discordgo.ApplicationCommandOptionUser {
-			// this is optional, we user the user who sent the message if not specified
-			userID = option.UserValue(nil).ID
-		} else if option.Name == "position" && option.Type == discordgo.ApplicationCommandOptionInteger {
+		switch option.Name {
+		case "user":
+			if option.Type != discordgo.ApplicationCommandOptionUser {
+				return "", errors.New("internal error, unexpected option type, expected discord user")
+			}
+			playerID = option.UserValue(nil).ID
+		case "position":
+			if option.Type != discordgo.ApplicationCommandOptionInteger {
+				return "", errors.New("internal error, unexpected option type, expected integer")
+			}
 			position = int(option.IntValue())
-		} else {
-			return error_response, nil
+		default:
+			return "", fmt.Errorf("invalid option to move player: %s", option.Name)
 		}
 	}
 
-	if position < 1 {
-		return "Position must be greater than 0.", nil
+	if position <= 0 {
+		return "", errors.New("position must be greater than 0")
+	}
+	if playerID == "" {
+		return "", errors.New("player not specified")
 	}
 
-	return c.MovePlayer(userID, position)
+	return c.MovePlayer(playerID, position)
 }

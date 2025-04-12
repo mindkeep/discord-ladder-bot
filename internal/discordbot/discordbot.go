@@ -52,15 +52,15 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			Description: "Register a user to a 1v1 ranking tournament.",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Name:        "user",
-					Type:        discordgo.ApplicationCommandOptionUser,
-					Description: "The alternate discord user to register (admin only).",
-					Required:    false,
-				},
-				{
 					Name:        "gamename",
 					Type:        discordgo.ApplicationCommandOptionString,
-					Description: "In game name.",
+					Description: "In game username.",
+					Required:    true,
+				},
+				{
+					Name:        "alt_user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "The alternate discord user to register (admin only).",
 					Required:    false,
 				},
 			},
@@ -70,9 +70,9 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			Description: "Unregister a user from a 1v1 ranking tournament.",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Name:        "user",
+					Name:        "alt_user",
 					Type:        discordgo.ApplicationCommandOptionUser,
-					Description: "The user to unregister (admin only).",
+					Description: "The alternate discord user to unregister (admin only).",
 					Required:    false,
 				},
 			},
@@ -81,11 +81,18 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			Name:        "challenge",
 			Description: "Challenge a user to a for their position.",
 			Options: []*discordgo.ApplicationCommandOption{
+
 				{
-					Name:        "user",
+					Name:        "defender",
 					Type:        discordgo.ApplicationCommandOptionUser,
-					Description: "The user to challenge.",
+					Description: "The user being challenged.",
 					Required:    true,
+				},
+				{
+					Name:        "alt_user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "The alternate challenger (admin only).",
+					Required:    false,
 				},
 			},
 		},
@@ -109,15 +116,37 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 						},
 					},
 				},
+				{
+					Name:        "alt_user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "The alternate defender (admin only).",
+					Required:    false,
+				},
 			},
 		},
 		{
 			Name:        "cancel",
 			Description: "Cancel a challenge.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "alt_user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "The alternate challenger (admin only).",
+					Required:    false,
+				},
+			},
 		},
 		{
 			Name:        "forfeit",
 			Description: "Forfeit a challenge (alternate to \"/result result:lost\").",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "alt_user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "The alternate challenger (admin only).",
+					Required:    false,
+				},
+			},
 		},
 		{
 			Name:        "move",
@@ -162,12 +191,6 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 			Description: "Set a value in the ranking data.",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Name:        "user",
-					Type:        discordgo.ApplicationCommandOptionUser,
-					Description: "Set data for another user (admin only).",
-					Required:    false,
-				},
-				{
 					Name:        "gamename",
 					Type:        discordgo.ApplicationCommandOptionString,
 					Description: "In game name.",
@@ -193,6 +216,12 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 					Name:        "notes",
 					Type:        discordgo.ApplicationCommandOptionString,
 					Description: "Notes to set.",
+					Required:    false,
+				},
+				{
+					Name:        "alt_user",
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Description: "Set data for another user (admin only).",
 					Required:    false,
 				},
 			},
@@ -277,6 +306,9 @@ func NewDiscordBot(conf *config.Config) (*DiscordBot, error) {
 		"delete_tournament": func(c *rankingdata.ChannelRankingData,
 			i *discordgo.InteractionCreate,
 			o []*discordgo.ApplicationCommandInteractionDataOption) (string, error) {
+			if !c.IsAdmin(i.Member.User.ID) {
+				return "You must be an admin to delete the tournament!", nil
+			}
 			return rankingDataPtr.RemoveChannel(i.ChannelID)
 		},
 		"register":   handleRegister,

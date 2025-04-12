@@ -44,14 +44,14 @@ type Player struct {
 
 type Challenge struct {
 	ChallengerID      string    `bson:"challenger_id"`
-	ChallengeeID      string    `bson:"challengee_id"`
+	DefenderID        string    `bson:"challengee_id"`
 	ChallengeDate     time.Time `bson:"challenge_date"`
 	ChallengeDeadline time.Time `bson:"challenge_deadline"`
 }
 
 type ResultHistory struct {
 	ChallengerID  string    `bson:"challenger_id"`
-	ChallengeeID  string    `bson:"challengee_id"`
+	DefenderID    string    `bson:"challengee_id"`
 	Result        string    `bson:"result"`
 	ChallengeDate time.Time `bson:"challenge_date,omitempty"`
 	ResolveDate   time.Time `bson:"resolve_date,omitempty"`
@@ -162,7 +162,7 @@ func (channel *ChannelRankingData) findPlayer(playerID string) (*Player, error) 
 func (channel *ChannelRankingData) findChallenge(playerID string) (*Challenge, error) {
 	for i := range channel.ActiveChallenges {
 		challenge := &channel.ActiveChallenges[i]
-		if challenge.ChallengerID == playerID || challenge.ChallengeeID == playerID {
+		if challenge.ChallengerID == playerID || challenge.DefenderID == playerID {
 			return challenge, nil
 		}
 	}
@@ -356,13 +356,13 @@ func (channel *ChannelRankingData) PrintRankings() (string, error) {
 		} else {
 			if chal.ChallengerID == player.PlayerID {
 				// player is the challenger
-				challengee, err := channel.findPlayer(chal.ChallengeeID)
+				defender, err := channel.findPlayer(chal.DefenderID)
 				if err != nil {
 					return "", errors.New("defender not found")
 				}
 				response += fmt.Sprintf("%d. %s/<@%s> (challenging %s/<@%s>)\n", pos,
 					player.GameName, player.PlayerID,
-					challengee.GameName, chal.ChallengeeID)
+					defender.GameName, chal.DefenderID)
 			} else {
 				// player is the defender
 				challenger, err := channel.findPlayer(chal.ChallengerID)
@@ -412,7 +412,7 @@ func (channel *ChannelRankingData) PrintChallenges() (string, error) {
 	var response string
 	// walk through the challenges and build the string
 	for _, challenge := range channel.ActiveChallenges {
-		challengee, err := channel.findPlayer(challenge.ChallengeeID)
+		defender, err := channel.findPlayer(challenge.DefenderID)
 		if err != nil {
 			return "", errors.New("defender not found")
 		}
@@ -422,7 +422,7 @@ func (channel *ChannelRankingData) PrintChallenges() (string, error) {
 		}
 		response += fmt.Sprintf("%s/<@%s>(#%d) vs %s/<@%s>(#%d)\n",
 			challenger.GameName, challenger.PlayerID, challenger.Position,
-			challengee.GameName, challengee.PlayerID, challengee.Position)
+			defender.GameName, defender.PlayerID, defender.Position)
 	}
 
 	return response, nil
@@ -438,7 +438,7 @@ func (channel *ChannelRankingData) PrintHistory() (string, error) {
 	var response string
 	// walk through the result history and build the string
 	for _, result := range channel.ResultHistory {
-		challengee, err := channel.findPlayer(result.ChallengeeID)
+		defender, err := channel.findPlayer(result.DefenderID)
 		if err != nil {
 			return "", errors.New("defender not found")
 		}
@@ -449,7 +449,7 @@ func (channel *ChannelRankingData) PrintHistory() (string, error) {
 		// TODO add dates
 		response += fmt.Sprintf("%s/<@%s> vs %s/<@%s> (%s)\n",
 			challenger.GameName, challenger.PlayerID,
-			challengee.GameName, challengee.PlayerID,
+			defender.GameName, defender.PlayerID,
 			result.Result)
 	}
 
@@ -561,7 +561,7 @@ func (channel *ChannelRankingData) RemovePlayer(playerID string) (string, error)
 	// remove any active challenges that the player is in
 	for i := range channel.ActiveChallenges {
 		challenge := &channel.ActiveChallenges[i]
-		if challenge.ChallengerID == playerID || challenge.ChallengeeID == playerID {
+		if challenge.ChallengerID == playerID || challenge.DefenderID == playerID {
 			channel.ActiveChallenges = append(channel.ActiveChallenges[:i], channel.ActiveChallenges[i+1:]...)
 			break
 		}
@@ -619,7 +619,7 @@ func (channel *ChannelRankingData) MovePlayer(playerID string, newPosition int) 
 }
 
 // function that starts a challenge
-func (channel *ChannelRankingData) StartChallenge(challengerID string, challengeeID string) (string, error) {
+func (channel *ChannelRankingData) StartChallenge(challengerID string, defenderID string) (string, error) {
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 
@@ -628,7 +628,7 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 	if err != nil {
 		return "", errors.New("challenger not found")
 	}
-	challengee, err := channel.findPlayer(challengeeID)
+	defender, err := channel.findPlayer(defenderID)
 	if err != nil {
 		return "", errors.New("defender not found")
 	}
@@ -638,27 +638,27 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 	if !channel.isPlayerAvailable(challengerID) {
 		return "", errors.New("challenger is not available")
 	}
-	if !channel.isPlayerAvailable(challengeeID) {
+	if !channel.isPlayerAvailable(defenderID) {
 		return "", errors.New("defender is not available")
 	}
 
-	// if the challengee is a lower rank, it's invalid
-	if challenger.Position < challengee.Position {
+	// if the defender is a lower rank, it's invalid
+	if challenger.Position < defender.Position {
 		return "", errors.New("defender is a lower rank")
 	}
 
 	switch channel.ChallengeMode {
 	// in linear/ladder mode, the challenger can only challenge the next person up
 	case "linear", "ladder":
-		if challenger.Position-1 != challengee.Position {
+		if challenger.Position-1 != defender.Position {
 			return "", errors.New("challenger may only challenge the next person up")
 		}
 	// in pyramid mode, the challenger can only challenge someone in the same tier or the tier below
 	case "pyramid":
-		// determine if the challenger is eligible to challenge challengee
+		// determine if the challenger is eligible to challenge defender
 		challengerTier := tierFromPos(challenger.Position)
-		challengeeTier := tierFromPos(challengee.Position)
-		if challengerTier-challengeeTier > 1 {
+		defenderTier := tierFromPos(defender.Position)
+		if challengerTier-defenderTier > 1 {
 			return "", errors.New("challenger must be within one tier of defender")
 		}
 	case "open":
@@ -671,13 +671,13 @@ func (channel *ChannelRankingData) StartChallenge(challengerID string, challenge
 	channel.ActiveChallenges = append(channel.ActiveChallenges,
 		Challenge{
 			ChallengerID:      challengerID,
-			ChallengeeID:      challengeeID,
+			DefenderID:        defenderID,
 			ChallengeDate:     time.Now(),
 			ChallengeDeadline: time.Now().Add(channel.ChallengeTimeoutDays),
 		})
 	response := fmt.Sprintf("Challenge started: %s/<@%s> vs %s/<@%s>",
 		challenger.GameName, challenger.PlayerID,
-		challengee.GameName, challengee.PlayerID)
+		defender.GameName, defender.PlayerID)
 	return response, nil
 }
 
@@ -704,8 +704,8 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 		return "", errors.New("invalid action")
 	}
 
-	// if the reporter is the challengee, reverse the result/action
-	if reporterID == challenge.ChallengeeID {
+	// if the reporter is the defender, reverse the result/action
+	if reporterID == challenge.DefenderID {
 		if action == "cancel" {
 			return "", errors.New("defender cannot cancel, only forfeit or report results")
 		}
@@ -723,7 +723,7 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 		channel.ResultHistory = append(channel.ResultHistory,
 			ResultHistory{
 				ChallengerID:  challenge.ChallengerID,
-				ChallengeeID:  challenge.ChallengeeID,
+				DefenderID:    challenge.DefenderID,
 				Result:        action,
 				ChallengeDate: challenge.ChallengeDate,
 				ResolveDate:   time.Now(),
@@ -734,7 +734,7 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 	if err != nil {
 		return "", errors.New("challenger not found")
 	}
-	challengee, err := channel.findPlayer(challenge.ChallengeeID)
+	defender, err := channel.findPlayer(challenge.DefenderID)
 	if err != nil {
 		return "", errors.New("defender not found")
 	}
@@ -743,24 +743,24 @@ func (channel *ChannelRankingData) ResolveChallenge(reporterID string, action st
 	if action == "lost" || action == "forfeit" || action == "timed out" {
 		result = fmt.Sprintf("Congratulations, %s/<@%s> has advanced from position %d to position %d!",
 			challenger.GameName, challenger.PlayerID,
-			challenger.Position, challengee.Position)
-		challenger.Position, challengee.Position = challengee.Position, challenger.Position
+			challenger.Position, defender.Position)
+		challenger.Position, defender.Position = defender.Position, challenger.Position
 		channel.fixPositions()
 	} else if action == "won" {
 		result = fmt.Sprintf("Sorry, %s/<@%s>, better luck next time! %s/<@%s> holds position %d!",
 			challenger.GameName, challenger.PlayerID,
-			challengee.GameName, challengee.PlayerID,
-			challengee.Position)
+			defender.GameName, defender.PlayerID,
+			defender.Position)
 	} else if action == "cancel" {
 		result = fmt.Sprintf("%s/<@%s> canceled challenge to %s/<@%s>",
 			challenger.GameName, challenger.PlayerID,
-			challengee.GameName, challengee.PlayerID)
+			defender.GameName, defender.PlayerID)
 	}
 
 	// remove the challenge
 	for i := range channel.ActiveChallenges {
 		challenge := &channel.ActiveChallenges[i]
-		if challenge.ChallengerID == reporterID || challenge.ChallengeeID == reporterID {
+		if challenge.ChallengerID == reporterID || challenge.DefenderID == reporterID {
 			channel.ActiveChallenges = append(channel.ActiveChallenges[:i], channel.ActiveChallenges[i+1:]...)
 			break
 		}
