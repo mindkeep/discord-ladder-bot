@@ -405,6 +405,10 @@ func (channel *ChannelRankingData) PrintChallenges() (string, error) {
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 
+	if len(channel.ActiveChallenges) == 0 {
+		return "No active challenges", nil
+	}
+
 	var response string
 	// walk through the challenges and build the string
 	for _, challenge := range channel.ActiveChallenges {
