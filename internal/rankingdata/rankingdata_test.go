@@ -2,6 +2,7 @@ package rankingdata
 
 import (
 	"testing"
+	"time"
 
 	"github.com/magiconair/properties/assert"
 )
@@ -197,5 +198,166 @@ func TestMovePlayer(t *testing.T) {
 	// attempt to move a player that doesn't exist
 	if _, err := channel.MovePlayer("1111", 3); err == nil {
 		t.Errorf("Error moving player: %s", err)
+	}
+}
+
+func TestCleanupExpiredChallenges(t *testing.T) {
+	data := RankingData{
+		Version: "v1_test",
+		Channels: []*ChannelRankingData{
+			{
+				ChannelID:            "1234",
+				ChallengeTimeoutDays: 7 * 24 * time.Hour,
+				RankedPlayers: []Player{
+					{PlayerID: "1234", GameName: "u1234", Status: "active", Position: 1},
+					{PlayerID: "5678", GameName: "u5678", Status: "active", Position: 2},
+					{PlayerID: "9012", GameName: "u9012", Status: "active", Position: 3},
+				},
+				ActiveChallenges: []Challenge{
+					{
+						ChallengerID:      "5678",
+						DefenderID:        "1234",
+						ChallengeDate:     time.Now().Add(-10 * 24 * time.Hour),
+						ChallengeDeadline: time.Now().Add(-3 * 24 * time.Hour), // Expired 3 days ago
+					},
+					{
+						ChallengerID:      "9012",
+						DefenderID:        "5678",
+						ChallengeDate:     time.Now(),
+						ChallengeDeadline: time.Now().Add(5 * 24 * time.Hour), // Still active
+					},
+				},
+				ResultHistory: []ResultHistory{},
+			},
+		},
+	}
+
+	channel, err := data.findChannel("1234")
+	if err != nil {
+		t.Errorf("Error finding channel: %s", err)
+		return
+	}
+
+	// Clean up expired challenges
+	expiredCount, err := channel.CleanupExpiredChallenges()
+	if err != nil {
+		t.Errorf("Error cleaning up expired challenges: %s", err)
+	}
+
+	// Check that one challenge was expired
+	assert.Equal(t, expiredCount, 1)
+
+	// Check that one challenge remains active
+	assert.Equal(t, len(channel.ActiveChallenges), 1)
+	assert.Equal(t, channel.ActiveChallenges[0].ChallengerID, "9012")
+
+	// Check that the expired challenge was added to result history
+	assert.Equal(t, len(channel.ResultHistory), 1)
+	assert.Equal(t, channel.ResultHistory[0].Result, "timed out")
+
+	// Check that positions were swapped (challenger 5678 advanced from 2 to 1)
+	player1, _ := channel.findPlayer("1234")
+	player2, _ := channel.findPlayer("5678")
+	assert.Equal(t, player2.Position, 1) // Challenger won and moved to position 1
+	assert.Equal(t, player1.Position, 2) // Defender dropped to position 2
+}
+
+func TestRemovePlayerIfNotInGuild(t *testing.T) {
+	data := RankingData{
+		Version: "v1_test",
+		Channels: []*ChannelRankingData{
+			{
+				ChannelID: "1234",
+				RankedPlayers: []Player{
+					{PlayerID: "1234", GameName: "u1234", Status: "active", Position: 1},
+					{PlayerID: "5678", GameName: "u5678", Status: "active", Position: 2},
+					{PlayerID: "9012", GameName: "u9012", Status: "active", Position: 3},
+				},
+				ActiveChallenges: []Challenge{
+					{
+						ChallengerID:      "5678",
+						DefenderID:        "1234",
+						ChallengeDate:     time.Now(),
+						ChallengeDeadline: time.Now().Add(7 * 24 * time.Hour),
+					},
+				},
+			},
+		},
+	}
+
+	channel, err := data.findChannel("1234")
+	if err != nil {
+		t.Errorf("Error finding channel: %s", err)
+		return
+	}
+
+	// Create guild member map (5678 left the server)
+	guildMembers := map[string]bool{
+		"1234": true,
+		"9012": true,
+		// 5678 is not in the map (left the server)
+	}
+
+	// Remove player 5678
+	removed, err := channel.RemovePlayerIfNotInGuild("5678", guildMembers)
+	if err != nil {
+		t.Errorf("Error removing player: %s", err)
+	}
+
+	// Check that player was removed
+	assert.Equal(t, removed, true)
+	assert.Equal(t, len(channel.RankedPlayers), 2)
+
+	// Check that the challenge involving player 5678 was removed
+	assert.Equal(t, len(channel.ActiveChallenges), 0)
+
+	// Check that positions were fixed
+	for i := range channel.RankedPlayers {
+		assert.Equal(t, channel.RankedPlayers[i].Position, i+1)
+	}
+
+	// Try to remove a player that is still in the guild
+	removed, err = channel.RemovePlayerIfNotInGuild("1234", guildMembers)
+	if err != nil {
+		t.Errorf("Error removing player: %s", err)
+	}
+	assert.Equal(t, removed, false)
+	assert.Equal(t, len(channel.RankedPlayers), 2)
+}
+
+func TestGetAllPlayerIDs(t *testing.T) {
+	data := RankingData{
+		Version: "v1_test",
+		Channels: []*ChannelRankingData{
+			{
+				ChannelID: "1234",
+				RankedPlayers: []Player{
+					{PlayerID: "1234", GameName: "u1234", Status: "active", Position: 1},
+					{PlayerID: "5678", GameName: "u5678", Status: "active", Position: 2},
+					{PlayerID: "9012", GameName: "u9012", Status: "active", Position: 3},
+				},
+			},
+		},
+	}
+
+	channel, err := data.findChannel("1234")
+	if err != nil {
+		t.Errorf("Error finding channel: %s", err)
+		return
+	}
+
+	playerIDs := channel.GetAllPlayerIDs()
+	assert.Equal(t, len(playerIDs), 3)
+
+	// Check that all player IDs are present
+	expectedIDs := map[string]bool{
+		"1234": true,
+		"5678": true,
+		"9012": true,
+	}
+	for _, id := range playerIDs {
+		if !expectedIDs[id] {
+			t.Errorf("Unexpected player ID: %s", id)
+		}
 	}
 }

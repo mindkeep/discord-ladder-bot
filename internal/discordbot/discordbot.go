@@ -5,6 +5,7 @@ import (
 	"discord_ladder_bot/internal/rankingdata"
 	"discord_ladder_bot/internal/version"
 	"fmt"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -394,6 +395,9 @@ func (bot *DiscordBot) Start() error {
 		}
 	}
 
+	// Start the nightly cleanup task
+	bot.StartNightlyCleanupTask()
+
 	return nil
 }
 
@@ -403,6 +407,94 @@ func (bot *DiscordBot) Stop() {
 		bot.Discord.ApplicationCommandDelete(bot.Discord.State.User.ID, "", command.ID)
 	}
 	bot.Discord.Close()
+}
+
+// StartNightlyCleanupTask starts a goroutine that runs cleanup tasks periodically
+func (bot *DiscordBot) StartNightlyCleanupTask() {
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+
+		// Run cleanup immediately on start
+		bot.runCleanupTasks()
+
+		// Then run every 24 hours
+		for range ticker.C {
+			bot.runCleanupTasks()
+		}
+	}()
+}
+
+// runCleanupTasks performs all cleanup operations
+func (bot *DiscordBot) runCleanupTasks() {
+	fmt.Println("Running nightly cleanup tasks...")
+
+	totalExpired := 0
+	totalRemoved := 0
+
+	// Get all guilds the bot is in
+	guilds := bot.Discord.State.Guilds
+
+	for _, channel := range bot.RankingData.Channels {
+		// Clean up expired challenges
+		expiredCount, err := channel.CleanupExpiredChallenges()
+		if err != nil {
+			fmt.Printf("Error cleaning up expired challenges for channel %s: %v\n", channel.ChannelID, err)
+			continue
+		}
+		totalExpired += expiredCount
+
+		// Find the guild for this channel
+		var guildID string
+		for _, guild := range guilds {
+			// Try to get the channel from the guild to verify it belongs to this guild
+			discordChannel, err := bot.Discord.Channel(channel.ChannelID)
+			if err == nil && discordChannel.GuildID == guild.ID {
+				guildID = guild.ID
+				break
+			}
+		}
+
+		if guildID == "" {
+			// Could not find guild for this channel, skip member check
+			continue
+		}
+
+		// Get all guild members
+		members, err := bot.Discord.GuildMembers(guildID, "", 1000)
+		if err != nil {
+			fmt.Printf("Error getting guild members for guild %s: %v\n", guildID, err)
+			continue
+		}
+
+		// Build a map of member IDs for quick lookup
+		memberIDs := make(map[string]bool)
+		for _, member := range members {
+			memberIDs[member.User.ID] = true
+		}
+
+		// Check each player and remove if they left the server
+		playerIDs := channel.GetAllPlayerIDs()
+		for _, playerID := range playerIDs {
+			removed, err := channel.RemovePlayerIfNotInGuild(playerID, memberIDs)
+			if err != nil {
+				fmt.Printf("Error removing player %s: %v\n", playerID, err)
+				continue
+			}
+			if removed {
+				totalRemoved++
+				fmt.Printf("Removed player %s from channel %s (left server)\n", playerID, channel.ChannelID)
+			}
+		}
+	}
+
+	// Save changes if any cleanup was done
+	if totalExpired > 0 || totalRemoved > 0 {
+		fmt.Printf("Cleanup complete: %d challenges expired, %d players removed\n", totalExpired, totalRemoved)
+		bot.RankingData.Write()
+	} else {
+		fmt.Println("Cleanup complete: no changes needed")
+	}
 }
 
 // Handle a message create event
