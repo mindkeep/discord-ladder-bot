@@ -813,3 +813,113 @@ func (channel *ChannelRankingData) SetPlayerNotes(playerID string, notes string)
 	player.Notes = notes
 	return nil
 }
+
+// CleanupExpiredChallenges removes challenges that have passed their deadline
+// and marks them as "timed out" in the result history
+func (channel *ChannelRankingData) CleanupExpiredChallenges() (int, error) {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	now := time.Now()
+	expiredCount := 0
+	var remainingChallenges []Challenge
+
+	for _, challenge := range channel.ActiveChallenges {
+		if now.After(challenge.ChallengeDeadline) {
+			// Challenge has expired
+			expiredCount++
+
+			// Add to result history as timed out
+			channel.ResultHistory = append(channel.ResultHistory,
+				ResultHistory{
+					ChallengerID:  challenge.ChallengerID,
+					DefenderID:    challenge.DefenderID,
+					Result:        "timed out",
+					ChallengeDate: challenge.ChallengeDate,
+					ResolveDate:   now,
+				})
+
+			// Find the players and swap positions (challenger wins on timeout)
+			challenger, err := channel.findPlayer(challenge.ChallengerID)
+			if err != nil {
+				fmt.Printf("Warning: Challenger %s not found for expired challenge in channel %s\n", 
+					challenge.ChallengerID, channel.ChannelID)
+				continue // Skip if player not found
+			}
+			defender, err := channel.findPlayer(challenge.DefenderID)
+			if err != nil {
+				fmt.Printf("Warning: Defender %s not found for expired challenge in channel %s\n", 
+					challenge.DefenderID, channel.ChannelID)
+				continue // Skip if player not found
+			}
+
+			// Swap positions (challenger advances on timeout)
+			challenger.Position, defender.Position = defender.Position, challenger.Position
+			channel.fixPositions()
+		} else {
+			// Challenge is still active
+			remainingChallenges = append(remainingChallenges, challenge)
+		}
+	}
+
+	channel.ActiveChallenges = remainingChallenges
+	return expiredCount, nil
+}
+
+// RemovePlayerIfNotInGuild removes a player if they are not in the specified guild members list
+// Returns true if player was removed, false otherwise
+func (channel *ChannelRankingData) RemovePlayerIfNotInGuild(playerID string, guildMemberIDs map[string]bool) (bool, error) {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	// Check if player exists
+	_, err := channel.findPlayer(playerID)
+	if err != nil {
+		return false, nil // Player not found, nothing to remove
+	}
+
+	// Check if player is still in guild
+	if guildMemberIDs[playerID] {
+		return false, nil // Player is still in guild
+	}
+
+	// Remove any active challenges that the player is in
+	var remainingChallenges []Challenge
+	for _, challenge := range channel.ActiveChallenges {
+		if challenge.ChallengerID != playerID && challenge.DefenderID != playerID {
+			remainingChallenges = append(remainingChallenges, challenge)
+		}
+	}
+	channel.ActiveChallenges = remainingChallenges
+
+	// Remove the player from the ranked players list
+	removedPos := 0
+	for i := range channel.RankedPlayers {
+		player := &channel.RankedPlayers[i]
+		if player.PlayerID == playerID {
+			removedPos = player.Position
+			channel.RankedPlayers = append(channel.RankedPlayers[:i], channel.RankedPlayers[i+1:]...)
+			break
+		}
+	}
+
+	if removedPos == 0 {
+		return false, nil // Player not found
+	}
+
+	// Fix positions after removal
+	channel.fixPositions()
+	return true, nil
+}
+
+// GetAllPlayerIDs returns a list of all player IDs in the channel
+func (channel *ChannelRankingData) GetAllPlayerIDs() []string {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	playerIDs := make([]string, 0, len(channel.RankedPlayers))
+	for _, player := range channel.RankedPlayers {
+		playerIDs = append(playerIDs, player.PlayerID)
+	}
+	return playerIDs
+}
