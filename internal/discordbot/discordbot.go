@@ -460,17 +460,30 @@ func (bot *DiscordBot) runCleanupTasks() {
 			continue
 		}
 
-		// Get all guild members
-		members, err := bot.Discord.GuildMembers(guildID, "", 1000)
-		if err != nil {
-			fmt.Printf("Error getting guild members for guild %s: %v\n", guildID, err)
-			continue
-		}
-
-		// Build a map of member IDs for quick lookup
+		// Get all guild members (with pagination for large guilds)
 		memberIDs := make(map[string]bool)
-		for _, member := range members {
-			memberIDs[member.User.ID] = true
+		after := ""
+		for {
+			members, err := bot.Discord.GuildMembers(guildID, after, 1000)
+			if err != nil {
+				fmt.Printf("Error getting guild members for guild %s: %v\n", guildID, err)
+				break
+			}
+
+			if len(members) == 0 {
+				break
+			}
+
+			// Add members to the map
+			for _, member := range members {
+				memberIDs[member.User.ID] = true
+				after = member.User.ID // Update for next page
+			}
+
+			// If we got fewer than 1000, we've reached the end
+			if len(members) < 1000 {
+				break
+			}
 		}
 
 		// Check each player and remove if they left the server

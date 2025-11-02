@@ -842,10 +842,14 @@ func (channel *ChannelRankingData) CleanupExpiredChallenges() (int, error) {
 			// Find the players and swap positions (challenger wins on timeout)
 			challenger, err := channel.findPlayer(challenge.ChallengerID)
 			if err != nil {
+				fmt.Printf("Warning: Challenger %s not found for expired challenge in channel %s\n", 
+					challenge.ChallengerID, channel.ChannelID)
 				continue // Skip if player not found
 			}
 			defender, err := channel.findPlayer(challenge.DefenderID)
 			if err != nil {
+				fmt.Printf("Warning: Defender %s not found for expired challenge in channel %s\n", 
+					challenge.DefenderID, channel.ChannelID)
 				continue // Skip if player not found
 			}
 
